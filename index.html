@@ -18,14 +18,18 @@
 <body>
   <script>
     // Paint a game's stored light theme straight away, so reloading it doesn't
-    // flash dark while the app loads. See `gameLightModeKey`.
+    // flash dark while the app loads, and the greys of a game with the neutral
+    // palette. See `gameLightModeKey` and `loadGameVisualStyle`.
     try {
       const game = /\bg\/[^/#?]+\/[^/#?]+/.exec(location.pathname + location.hash)
-      if (game && localStorage.getItem('visual_light_mode/' + game[0]) === 'true') {
-        document.documentElement.style.backgroundColor = '#f8fafc'
-        document.documentElement.style.colorScheme = 'light'
-        document.body.style.backgroundColor = '#f8fafc'
+      const light = game && localStorage.getItem('visual_light_mode/' + game[0]) === 'true'
+      const neutral = game && localStorage.getItem('visual_style/' + game[0]) === 'neutral'
+      const background = neutral ? (light ? '#fafafa' : '#171717') : light ? '#f8fafc' : ''
+      if (background) {
+        document.documentElement.style.backgroundColor = background
+        document.body.style.backgroundColor = background
       }
+      if (light) document.documentElement.style.colorScheme = 'light'
     } catch {}
   </script>
   <div id="root"></div>

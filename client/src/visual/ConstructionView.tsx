@@ -343,6 +343,8 @@ interface Props {
   mode?: ConstructionMode
   style?: React.CSSProperties
   headerSlot?: React.ReactNode
+  /** Shown before Reset and Undo: the Proof tab in a game with `VisualTypeColumn`. */
+  controlsSlot?: React.ReactNode
   isPhonePortrait?: boolean
   /** Pre-fill the construction term (e.g. when a hyp was dropped onto this theorem). */
   initialTerm?: ConstructionTerm
@@ -356,7 +358,7 @@ interface Props {
 
 export function ConstructionView({
   varName, goalBody, contextVarNames, onApply, onClose, isProcessing,
-  promptMode = 'propose', mode = 'nat', style, headerSlot, isPhonePortrait = false, initialTerm,
+  promptMode = 'propose', mode = 'nat', style, headerSlot, controlsSlot, isPhonePortrait = false, initialTerm,
   successorName = 'succ', visualInfos = [], persistentHints = false,
 }: Props) {
   const [term, setTerm] = useState<ConstructionTerm>(() => initialTerm ?? makeSlot())
@@ -706,7 +708,8 @@ export function ConstructionView({
           </div>
 
           {/* Reset and Undo — same position as in TransformationView */}
-          <div className="tr-controls">
+          <div className={`tr-controls${controlsSlot ? ' with-proof-tab' : ''}`}>
+            {controlsSlot}
             <button
               onClick={handleReset}
               disabled={!canUndo}

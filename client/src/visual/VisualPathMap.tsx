@@ -28,12 +28,15 @@ import {
 } from './pathMapLayout'
 import { visualInterfaceScale } from './interfaceScale'
 import { bonusAnchorsOf, computeVisualProgressFrontier, isVisualLevelUnlocked } from './visualWorldProgress'
+import { NEUTRAL_WORLD_COLOR, WORLD_SCHEMES } from './worldScheme'
 
 /** The named world colours. Their fill and edge are in the palette (palette.css),
  * as `--pal-world-<name>` and `--pal-world-<name>-edge`. */
 const WORLD_COLOR_NAMES = new Set([
   'grey', 'purple', 'blue', 'sky', 'teal', 'green', 'amber', 'orange', 'red', 'pink', 'indigo', 'lime',
 ])
+/** The schemes of the neutral palette, which only that palette has colours for. */
+const WORLD_SCHEME_NAMES = new Set<string>(WORLD_SCHEMES)
 
 /** The map's own colours, from the palette of the scheme in use. */
 const THEME = {
@@ -49,9 +52,6 @@ type PathMapTheme = typeof THEME
 const PATH_OUTER_WIDTH = 16
 const PATH_INNER_WIDTH = 10
 const MAP_PADDING = 48
-/** A phone scrolls sideways rather than shrink the map below this, so its levels
- * stay readable and tappable. */
-const MIN_PHONE_SCALE = 0.62
 
 interface LevelMeta {
   title?: string
@@ -62,8 +62,10 @@ interface LevelMeta {
   introduction?: string
 }
 
-function worldColor(name: string) {
-  const known = WORLD_COLOR_NAMES.has(name) ? name : 'purple'
+function worldColor(name: string, neutral: boolean) {
+  const known = WORLD_COLOR_NAMES.has(name) || (neutral && WORLD_SCHEME_NAMES.has(name))
+    ? name
+    : neutral ? NEUTRAL_WORLD_COLOR : 'purple'
   return { fill: `rgb(var(--pal-world-${known}))`, edge: `rgb(var(--pal-world-${known}-edge))` }
 }
 
@@ -117,15 +119,17 @@ function useLevelMeta(gameId: string, worldSize: Record<string, number> | null |
   return meta
 }
 
-function PathMapLevel({ node, meta, state, theme, onOpen }: {
+function PathMapLevel({ node, meta, state, theme, neutral, onOpen }: {
   node: PathMapNode
   meta?: LevelMeta
   state: 'completed' | 'frontier' | 'locked'
   theme: PathMapTheme
+  /** The game has the neutral palette (`VisualNeutralPalette`). */
+  neutral: boolean
   /** Undefined while the level is locked. */
   onOpen?: () => void
 }) {
-  const color = worldColor(node.color)
+  const color = worldColor(node.color, neutral)
   const label = meta?.label ?? String(node.index)
   const title = plainLevelTitle(meta?.title ?? `Level ${label}`)
   const { tooltip, triggerProps } = useMapLevelTooltip(state === 'locked' ? `🔒 ${title}` : title)
@@ -221,6 +225,8 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
   const [searchParams, setSearchParams] = useSearchParams()
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const theme = THEME
+  const neutral = Boolean(gameInfo.visualNeutralPalette)
+  const colorOf = (name: string) => worldColor(name, neutral)
   // Subscribe so completions and imports repaint the map.
   useAppSelector(selectProgress(gameId))
   const meta = useLevelMeta(gameId, gameInfo.worldSize)
@@ -232,6 +238,22 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
     const onResize = () => setViewport({ viewportWidth: window.innerWidth, viewportHeight: window.innerHeight })
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
+  }, [])
+  // The room the scroller has for the map, less its padding and scroll bar. The map
+  // is never wider than this: it zooms out rather than scroll sideways.
+  const [availableWidth, setAvailableWidth] = React.useState<number | null>(null)
+  React.useLayoutEffect(() => {
+    const scroller = scrollRef.current
+    if (!scroller) return
+    const measure = () => {
+      const style = window.getComputedStyle(scroller)
+      const room = scroller.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      setAvailableWidth(Number.isFinite(room) && room > 0 ? Math.floor(room) : null)
+    }
+    measure()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(scroller)
+    return () => observer?.disconnect()
   }, [])
 
   const nodesById = gameInfo.worlds?.nodes
@@ -251,8 +273,12 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
     edges: gameInfo.worlds?.edges ?? [],
     worldSize: gameInfo.worldSize ?? {},
     skippedLevels: gameInfo.skippedLevels,
-  }, compact ? { columnWidth: 88 } : {}),
-  [compact, gameInfo.skippedLevels, gameInfo.worldSize, gameInfo.worlds?.edges, nodesById])
+  }, {
+    ...(compact ? { columnWidth: 88 } : {}),
+    // With the neutral palette, a world without a colour is grey.
+    ...(neutral ? { defaultColor: NEUTRAL_WORLD_COLOR } : {}),
+  }),
+  [compact, gameInfo.skippedLevels, gameInfo.worldSize, gameInfo.worlds?.edges, neutral, nodesById])
 
   const frontier = computeVisualProgressFrontier({
     worldIds: Object.keys(nodesById ?? {}),
@@ -311,8 +337,6 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
     const targetRect = target.getBoundingClientRect()
     const offset = targetRect.top + targetRect.height / 2 - (scrollRect.top + scrollRect.height / 2)
     if (offset > 0) scroller.scrollTop += offset
-    // Sideways only where a phone can't fit the whole map.
-    scroller.scrollLeft += targetRect.left + targetRect.width / 2 - (scrollRect.left + scrollRect.width / 2)
   })
 
   const { bounds } = layout
@@ -320,14 +344,13 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
   const viewY = bounds.y1 - MAP_PADDING
   const viewWidth = bounds.x2 - bounds.x1 + 2 * MAP_PADDING
   const viewHeight = bounds.y2 - bounds.y1 + 2 * MAP_PADDING
-  // Natural size where it fits, larger on a large window, and scaled down to fit
-  // a narrower one, as far as a phone can still read it.
-  const fittedWidth = Math.min(
+  // Natural size where it fits, larger on a large window, and zoomed out to fit a
+  // narrower one, a phone's included: the map never scrolls sideways.
+  const displayWidth = Math.min(
     viewWidth * visualInterfaceScale(viewportWidth, viewportHeight),
-    // The window less the scroller's padding and scrollbar.
-    Math.max(240, viewportWidth - (compact ? 16 : 48)),
+    // Until the scroller is measured: the window less its padding and scroll bar.
+    availableWidth ?? Math.max(240, viewportWidth - (compact ? 16 : 48)),
   )
-  const displayWidth = compact ? Math.max(fittedWidth, viewWidth * MIN_PHONE_SCALE) : fittedWidth
 
   // Two passes, outlines then fillings, so overlapping stretches join without
   // seams; lit stretches go last so they cover the outline of an unlit twin.
@@ -359,7 +382,7 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
             <path
               key={`${segment.key}:outer`}
               d={segment.data}
-              stroke={segment.lit ? worldColor(segment.color).edge : theme.shadow}
+              stroke={segment.lit ? colorOf(segment.color).edge : theme.shadow}
               strokeWidth={PATH_OUTER_WIDTH}
             />
           ))}
@@ -370,7 +393,7 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
               data-segment={segment.key}
               data-lit={segment.lit ? 'true' : 'false'}
               d={segment.data}
-              stroke={segment.lit ? worldColor(segment.color).fill : theme.background}
+              stroke={segment.lit ? colorOf(segment.color).fill : theme.background}
               strokeWidth={PATH_INNER_WIDTH}
             />
           ))}
@@ -380,7 +403,7 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
             <React.Fragment key={bridge.key}>
               <path
                 d={bridge.data}
-                stroke={bridge.lit ? worldColor(bridge.color).edge : theme.shadow}
+                stroke={bridge.lit ? colorOf(bridge.color).edge : theme.shadow}
                 strokeWidth={PATH_OUTER_WIDTH}
               />
               <path
@@ -388,7 +411,7 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
                 data-segment={bridge.key}
                 data-lit={bridge.lit ? 'true' : 'false'}
                 d={bridge.data}
-                stroke={bridge.lit ? worldColor(bridge.color).fill : theme.background}
+                stroke={bridge.lit ? colorOf(bridge.color).fill : theme.background}
                 strokeWidth={PATH_INNER_WIDTH}
               />
             </React.Fragment>
@@ -407,7 +430,7 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
               y={label.y}
               dy="0.35em"
               textAnchor={label.anchor}
-              fill={unlocked ? worldColor(label.color).fill : theme.lockedText}
+              fill={unlocked ? colorOf(label.color).fill : theme.lockedText}
             >{label.text}</text>
           )
         })}
@@ -420,6 +443,7 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
               meta={meta?.[`${node.world}:${node.level}`]}
               state={state}
               theme={theme}
+              neutral={neutral}
               onOpen={state !== 'locked' || openAnyLevel ? () => openLevel(node) : undefined}
             />
           )

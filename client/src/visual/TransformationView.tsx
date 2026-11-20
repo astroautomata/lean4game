@@ -340,6 +340,8 @@ interface Props {
   onPageIndexChange: (tabId: string, pageIndex: number) => void
   /** Optional header bar rendered at the top of the overlay. */
   headerSlot?: React.ReactNode
+  /** Shown before Reset and Undo: the Proof tab in a game with `VisualTypeColumn`. */
+  controlsSlot?: React.ReactNode
   /** Applied to the overlay root div (e.g. for sidebar-offset positioning). */
   style?: React.CSSProperties
   isPhonePortrait?: boolean
@@ -394,7 +396,7 @@ function printLeanExpression(node: ExpressionNode): string {
 export function TransformationView({
   relation, goalLhsStr, goalRhsStr, goalLhsNode, goalRhsNode, equalityHyps, theoremEqualityHyps,
   onRewrite, onUndo, canUndo, onReset, canReset, onSwap, onClose, isReverse, onIsReverseChange,
-  selectedTab, onSelectedTabChange, pageIndexByTab, onPageIndexChange, rewriteStepCount, headerSlot, style,
+  selectedTab, onSelectedTabChange, pageIndexByTab, onPageIndexChange, rewriteStepCount, headerSlot, controlsSlot, style,
   isPhonePortrait = false, emphasizeItems, axioms, visualInfos = [],
   rewriteOnly = false, hideRewriteDirection = false, hideSwapSides = false, emphasizeForall, onCheck, completed = false,
   rewriteCheck = false, persistentHints = false, noTabs = false, noHypothesesTab = false, reviewOnly = false,
@@ -1619,7 +1621,8 @@ export function TransformationView({
           )}
 
           {/* Reset and Undo */}
-          <div className="tr-controls">
+          <div className={`tr-controls${controlsSlot ? ' with-proof-tab' : ''}`}>
+            {controlsSlot}
             <button
               onClick={() => void handleReset()}
               disabled={!canReset}

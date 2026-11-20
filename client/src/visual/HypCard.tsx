@@ -26,6 +26,9 @@ interface HypCardProps {
   showDropTarget?: boolean
   isPotentialTarget?: boolean
   mobileList?: boolean
+  /** A variable in its own column on the canvas (`VisualTypeColumn`): it is listed
+   *  there, and only moves up and down within it. */
+  typeColumn?: boolean
   animateMove?: boolean
   iffDirection?: IffDirection
   onClickAction?: () => void
@@ -48,6 +51,7 @@ export function HypCard({
   showDropTarget = false,
   isPotentialTarget = false,
   mobileList = false,
+  typeColumn = false,
   animateMove = false,
   iffDirection = 'forward',
   onClickAction,
@@ -60,7 +64,7 @@ export function HypCard({
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: card.id,
     disabled: !isMovable,
-    data: { hypCard: true, card },
+    data: { hypCard: true, card, typeColumn },
   })
 
   const { setNodeRef: setDropRef, isOver } = useDroppable({
@@ -97,6 +101,7 @@ export function HypCard({
     isConstructable ? 'constructable' : '',
     animateMove ? 'fly-in' : '',
     mobileList ? 'mobile-list-card' : '',
+    typeColumn ? 'type-column-card' : '',
   ].filter(Boolean).join(' ')
 
   const hypName = card.hyp.names[0] ?? ''

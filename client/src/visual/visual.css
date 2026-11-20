@@ -52,9 +52,12 @@
   --visual-info-bg-strong: rgba(var(--pal-info), 0.1);
   --visual-info-ring: rgba(var(--pal-info), 0.5);
   --visual-warning: rgb(var(--pal-warning));
-  --visual-warning-soft: rgba(var(--pal-warning-soft), 0.7);
   --visual-warning-bg: rgba(var(--pal-warning), 0.1);
-  --visual-warning-glow: rgba(var(--pal-warning-soft), 0.4);
+  --visual-goal-label: rgba(var(--pal-goal-label), 0.7);
+  --visual-goal-glow: rgba(var(--pal-goal-label), 0.4);
+  --visual-hint-border: rgba(var(--pal-hint), 0.4);
+  --visual-tactic-bg: rgba(var(--pal-tactic), 0.2);
+  --visual-tactic-border: rgba(var(--pal-tactic), 0.55);
   --visual-success: rgb(var(--pal-success-text));
   --visual-success-soft: rgba(var(--pal-success), 0.8);
   --visual-success-bg: rgba(var(--pal-success), 0.18);
@@ -140,9 +143,12 @@
   --visual-info-bg: rgba(var(--pal-info), 0.06);
   --visual-info-bg-strong: rgba(var(--pal-info), 0.08);
   --visual-info-ring: rgba(var(--pal-info), 0.25);
-  --visual-warning-soft: rgba(var(--pal-warning-soft), 0.82);
   --visual-warning-bg: rgba(var(--pal-warning), 0.12);
-  --visual-warning-glow: rgba(var(--pal-warning-soft), 0.22);
+  --visual-goal-label: rgba(var(--pal-goal-label), 0.82);
+  --visual-goal-glow: rgba(var(--pal-goal-label), 0.22);
+  --visual-hint-border: rgba(var(--pal-hint), 0.22);
+  --visual-tactic-bg: rgba(var(--pal-tactic), 0.1);
+  --visual-tactic-border: rgba(var(--pal-tactic), 0.24);
   --visual-success-soft: rgba(var(--pal-success), 0.82);
   --visual-success-bg: rgba(var(--pal-success), 0.12);
   --visual-success-bg-strong: rgba(var(--pal-success), 0.18);
@@ -192,6 +198,111 @@
 }
 
 
+/* ── The neutral look (`VisualNeutralPalette`) ──
+   The palette's greys are the base. Everything else takes one of four colours
+   of the world being played, which the palette lists per scheme
+   (`VisualWorldColor lantern`). On the map, and in a world with no scheme of
+   its own, the four are the greys of the `grey` scheme. */
+.app[data-visual-style='neutral'] {
+  --pal-first: var(--pal-world-grey);
+  --pal-second: var(--pal-world-grey-2);
+  --pal-third: var(--pal-world-grey-3);
+  --pal-fourth: var(--pal-world-grey-4);
+
+  /* The first: what lights up when a goal, a branch or a level is finished. */
+  --pal-success: var(--pal-first);
+  --pal-success-text: var(--pal-first);
+  --pal-complete: var(--pal-first);
+  --pal-stream-complete: var(--pal-first);
+  /* The second: what the player acts with. */
+  --pal-accent: var(--pal-second);
+  --pal-accent-soft: var(--pal-second);
+  --pal-accent-strong: var(--pal-second);
+  --pal-accent-pale: var(--pal-second);
+  --pal-accent-text: var(--pal-second);
+  --pal-accent-text-strong: var(--pal-second);
+  --pal-emphasis: var(--pal-second);
+  --pal-info: var(--pal-second);
+  --pal-info-text: var(--pal-second);
+  --pal-attention: var(--pal-second);
+  --pal-attention-text: var(--pal-second);
+  --pal-iff-forward: var(--pal-second);
+  /* The third: theorem cards, and what the player derived. */
+  --pal-derived: var(--pal-third);
+  --pal-derived-tint: var(--pal-third);
+  --pal-derived-text: var(--pal-third);
+  --pal-construction: var(--pal-third);
+  --pal-integer: var(--pal-third);
+  --pal-iff-reverse: var(--pal-third);
+  /* The fourth: tactic cards. */
+  --pal-tactic: var(--pal-fourth);
+  --pal-tactic-text: var(--pal-fourth);
+
+  /* A finished level's header is the first colour, let into the surface. */
+  --visual-header-complete-bg: color-mix(in srgb, rgb(var(--pal-first)) 14%, rgba(var(--pal-surface), 0.94));
+  --visual-header-complete-border: rgba(var(--pal-first), 0.45);
+}
+
+.app[data-visual-style='neutral'][data-visual-theme='light'] {
+  --visual-header-complete-bg: color-mix(in srgb, rgb(var(--pal-first)) 12%, rgba(var(--pal-surface), 0.92));
+  --visual-header-complete-border: rgba(var(--pal-first), 0.35);
+}
+
+.app[data-visual-style='neutral'][data-world-scheme='lantern'] {
+  --pal-first: var(--pal-world-lantern);
+  --pal-second: var(--pal-world-lantern-2);
+  --pal-third: var(--pal-world-lantern-3);
+  --pal-fourth: var(--pal-world-lantern-4);
+}
+
+.app[data-visual-style='neutral'][data-world-scheme='aqueduct'] {
+  --pal-first: var(--pal-world-aqueduct);
+  --pal-second: var(--pal-world-aqueduct-2);
+  --pal-third: var(--pal-world-aqueduct-3);
+  --pal-fourth: var(--pal-world-aqueduct-4);
+}
+
+.app[data-visual-style='neutral'][data-world-scheme='signal'] {
+  --pal-first: var(--pal-world-signal);
+  --pal-second: var(--pal-world-signal-2);
+  --pal-third: var(--pal-world-signal-3);
+  --pal-fourth: var(--pal-world-signal-4);
+}
+
+.app[data-visual-style='neutral'][data-world-scheme='blossom'] {
+  --pal-first: var(--pal-world-blossom);
+  --pal-second: var(--pal-world-blossom-2);
+  --pal-third: var(--pal-world-blossom-3);
+  --pal-fourth: var(--pal-world-blossom-4);
+}
+
+.app[data-visual-style='neutral'][data-world-scheme='riverside'] {
+  --pal-first: var(--pal-world-riverside);
+  --pal-second: var(--pal-world-riverside-2);
+  --pal-third: var(--pal-world-riverside-3);
+  --pal-fourth: var(--pal-world-riverside-4);
+}
+
+.app[data-visual-style='neutral'][data-world-scheme='sandstone'] {
+  --pal-first: var(--pal-world-sandstone);
+  --pal-second: var(--pal-world-sandstone-2);
+  --pal-third: var(--pal-world-sandstone-3);
+  --pal-fourth: var(--pal-world-sandstone-4);
+}
+
+.app[data-visual-style='neutral'][data-world-scheme='circuit'] {
+  --pal-first: var(--pal-world-circuit);
+  --pal-second: var(--pal-world-circuit-2);
+  --pal-third: var(--pal-world-circuit-3);
+  --pal-fourth: var(--pal-world-circuit-4);
+}
+
+.app[data-visual-style='neutral'][data-world-scheme='canyon'] {
+  --pal-first: var(--pal-world-canyon);
+  --pal-second: var(--pal-world-canyon-2);
+  --pal-third: var(--pal-world-canyon-3);
+  --pal-fourth: var(--pal-world-canyon-4);
+}
 
 /* Large windows scale the visual interface up, to stay readable at a distance. It's
    sized in rem, so growing the root font keeps its proportions and leaves drag
@@ -549,7 +660,7 @@
 }
 
 .visual-page .statement-card.variable-only-tactic {
-  --bevel-border-color: var(--visual-danger-border);
+  --bevel-border-color: var(--visual-tactic-border);
 }
 
 .visual-page .statement-card.variable-card::after,
@@ -668,8 +779,8 @@
 }
 
 .visual-page .statement-card.tactic-tray-card {
-  border-color: var(--visual-danger-border);
-  background: var(--visual-danger-bg);
+  border-color: var(--visual-tactic-border);
+  background: var(--visual-tactic-bg);
   max-width: min(20rem, calc(100vw - 6rem));
   white-space: normal;
   overflow: hidden;
@@ -677,7 +788,7 @@
 }
 
 .visual-page .statement-card.tactic-tray-card:hover {
-  background: var(--visual-danger-bg);
+  background: var(--visual-tactic-bg);
 }
 
 .visual-page .statement-card.tactic-tray-card.tactic-ellipse-card {
@@ -697,7 +808,7 @@
 }
 
 .visual-page .statement-card.tactic-tray-card.tactic-ellipse-card:hover {
-  background: color-mix(in srgb, var(--visual-danger-bg) 88%, rgb(var(--pal-card)) 12%);
+  background: color-mix(in srgb, var(--visual-tactic-bg) 88%, rgb(var(--pal-card)) 12%);
 }
 
 .visual-page .statement-card.tactic-tray-card.tactic-ellipse-card .tactic-label {
@@ -785,7 +896,7 @@
 .visual-page .visual-info-callout {
   max-width: min(24rem, calc(100vw - 2rem));
   padding: 0.8rem 0.95rem;
-  border: 1px solid var(--visual-info-border);
+  border: 1px solid var(--visual-hint-border);
   border-radius: 8px;
   background: var(--visual-surface-elevated);
   color: var(--text-primary);
@@ -1262,7 +1373,7 @@
 .visual-page .goal-prefix {
   font-size: 0.7rem;
   font-weight: 600;
-  color: var(--visual-warning-soft);
+  color: var(--visual-goal-label);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   margin-bottom: 0.4rem;
@@ -1319,7 +1430,7 @@
   cursor: pointer;
 }
 .visual-page .statement-card.goal.transformable:hover {
-  box-shadow: 0 0 30px var(--visual-warning-glow), 0 0 60px var(--visual-warning-glow);
+  box-shadow: 0 0 30px var(--visual-goal-glow), 0 0 60px var(--visual-goal-glow);
 }
 
 /* ── Constructable goal hint (∃ goals) ── */
@@ -1335,7 +1446,7 @@
   cursor: pointer;
 }
 .visual-page .statement-card.goal.clickable:hover {
-  box-shadow: 0 0 30px var(--visual-warning-glow), 0 0 60px var(--visual-warning-glow);
+  box-shadow: 0 0 30px var(--visual-goal-glow), 0 0 60px var(--visual-goal-glow);
 }
 
 .visual-page .statement-card.clickable:not(.goal) {
@@ -1598,7 +1709,7 @@
 }
 
 .visual-header-check {
-  color: rgb(var(--pal-derived));
+  color: rgb(var(--pal-complete));
   font-size: 1rem;
   font-weight: 700;
   flex-shrink: 0;
@@ -1707,24 +1818,24 @@
 }
 
 .visual-header-nav-btn.emphasized {
-  background: rgba(var(--pal-derived), 0.18);
-  border-color: rgba(var(--pal-derived), 0.55);
-  color: rgb(var(--pal-derived));
+  background: rgba(var(--pal-complete), 0.18);
+  border-color: rgba(var(--pal-complete), 0.55);
+  color: rgb(var(--pal-complete));
   font-weight: 700;
   padding: 0.3rem 1rem;
-  box-shadow: 0 0 14px rgba(var(--pal-derived), 0.2);
+  box-shadow: 0 0 14px rgba(var(--pal-complete), 0.2);
   animation: nextLevelPulse 2s ease-in-out infinite;
 }
 
 .visual-header-nav-btn.emphasized:hover {
-  background: rgba(var(--pal-derived), 0.3);
-  border-color: rgba(var(--pal-derived), 0.8);
-  box-shadow: 0 0 20px rgba(var(--pal-derived), 0.4);
+  background: rgba(var(--pal-complete), 0.3);
+  border-color: rgba(var(--pal-complete), 0.8);
+  box-shadow: 0 0 20px rgba(var(--pal-complete), 0.4);
 }
 
 @keyframes nextLevelPulse {
-  0%, 100% { box-shadow: 0 0 14px rgba(var(--pal-derived), 0.2); }
-  50%       { box-shadow: 0 0 22px rgba(var(--pal-derived), 0.5); }
+  0%, 100% { box-shadow: 0 0 14px rgba(var(--pal-complete), 0.2); }
+  50%       { box-shadow: 0 0 22px rgba(var(--pal-complete), 0.5); }
 }
 
 /* In transformation overlay, raise header above the processing blocker */
@@ -1813,7 +1924,7 @@
 .visual-page .tr-back-btn {
   position: absolute;
   top: calc(3.25rem + 0.6rem);
-  left: calc(var(--proof-sidebar-width, 0px) + 2.25rem + 0.75rem);
+  left: calc(var(--proof-sidebar-width, 0px) + var(--proof-tab-width, 2.25rem) + 0.75rem);
   transition: left 0.3s cubic-bezier(0.22, 1, 0.36, 1);
   z-index: 60;
   display: flex;
@@ -1926,6 +2037,24 @@
   pointer-events: none;
 }
 
+/* The specialization view's hints: under the header, in the middle. */
+.visual-page .tr-top-lessons {
+  position: absolute;
+  top: calc(3.25rem + 0.75rem);
+  left: calc(var(--proof-sidebar-width, 0px) + (100% - var(--proof-sidebar-width, 0px)) / 2);
+  transform: translateX(-50%);
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.visual-page .tr-top-lessons .transform-info {
+  position: static;
+}
+
 .visual-page .transform-info.side-info {
   left: calc(var(--proof-sidebar-width, 0px) + (100vw - var(--proof-sidebar-width, 0px)) / 2);
   top: calc(50% + 5rem);
@@ -1988,6 +2117,106 @@
   gap: var(--tr-controls-gap);
   z-index: 30;
   transition: left 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* With `VisualTypeColumn` the Proof tab is the first of the controls, flush with the
+   left edge (or with the open sidebar), and Reset and Undo follow it. */
+.visual-page .tr-controls.with-proof-tab {
+  left: var(--proof-sidebar-width, 0px);
+  align-items: center;
+}
+
+.visual-page.tr-transformation-overlay .tr-controls.with-proof-tab,
+.visual-page.tr-construction-overlay .tr-controls.with-proof-tab {
+  left: 0;
+}
+
+.visual-page .proof-tab-btn {
+  flex: none;
+  width: 2.25rem;
+  height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--visual-surface-panel);
+  border: 1px solid var(--visual-glass-border);
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+  cursor: pointer;
+  writing-mode: vertical-rl;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--visual-text-secondary);
+  font-family: var(--font-family), system-ui, sans-serif;
+  -webkit-appearance: none;
+  appearance: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 2px 0 8px var(--visual-shadow-strong);
+  transition: background 0.15s, color 0.15s;
+}
+
+.visual-page .proof-tab-btn:hover {
+  background: var(--visual-surface-strong);
+  color: var(--visual-text-bright);
+}
+
+/* ── The variables' column (`VisualTypeColumn`) ──
+   On a desktop and a phone held sideways, a level's variables (`n : ℕ`, `A : Prop`)
+   are listed at the left of the canvas, from under the header down to the controls.
+   They can be put in another order there but not dragged out; tactics are still
+   dropped on them. The phone's portrait layout has its own column. */
+.visual-page .type-column {
+  position: absolute;
+  left: 0;
+  top: calc(3.25rem + 0.75rem);
+  bottom: calc(var(--tray-height, 0px) + 6rem);
+  width: 9.5rem;
+  box-sizing: border-box;
+  padding: 0.25rem 0.75rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  border-right: 1px solid var(--visual-border-subtle);
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  z-index: 12;
+}
+
+.visual-page .type-column::-webkit-scrollbar {
+  display: none;
+}
+
+.visual-page .type-column .type-column-card,
+.visual-page.type-column-layout .hyp-overlay-card.variable-overlay-card {
+  flex: none;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.62rem 0.5rem;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.visual-page .type-column .type-column-card {
+  cursor: ns-resize;
+}
+
+.visual-page .type-column .statement-card-main,
+.visual-page.type-column-layout .hyp-overlay-card.variable-overlay-card .statement-card-main {
+  justify-content: center;
+}
+
+.visual-page.type-column-layout .hyp-overlay-card.variable-overlay-card {
+  cursor: grabbing;
 }
 
 /* Swap / Reverse — bottom-right */
@@ -3584,7 +3813,7 @@
   }
 
   .visual-page.phone-portrait .statement-card.tactic-tray-card:hover {
-    background: var(--visual-danger-bg);
+    background: var(--visual-tactic-bg);
   }
 
   .visual-page.phone-portrait .statement-card.goal:hover,
@@ -4588,6 +4817,11 @@
    Every level is a node on its world's path; colours come from VisualPathMap. */
 .visual-path-map-scroll {
   justify-content: flex-start;
+  /* The map is fitted to the scroller's width (VisualPathMap), so it only scrolls
+     up and down. The bar is always there, so that fitting the map can't make it
+     come and go. */
+  overflow-x: hidden;
+  overflow-y: scroll;
 }
 
 .visual-path-map-svg {
@@ -4600,12 +4834,6 @@
 }
 
 @media (max-width: 720px) and (orientation: portrait) {
-  .visual-path-map-scroll {
-    overflow-x: auto;
-    touch-action: pan-x pan-y;
-    overscroll-behavior-x: contain;
-  }
-
   .visual-map-appbar:has(.visual-map-theme-toggle) .visual-map-side {
     flex: 0 0 auto;
   }

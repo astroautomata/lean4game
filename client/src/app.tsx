@@ -13,6 +13,8 @@ import './visual/palette.css';
 import { PreferencesContext, WorldLevelIdContext} from './components/infoview/context';
 import UsePreferences from "./state/hooks/use_preferences"
 import { loadGameLightModePreference } from './state/local_storage'
+import { useGetGameInfoQuery } from './state/api'
+import { loadGameVisualStyle, saveGameVisualStyle, worldSchemeOf } from './visual/worldScheme'
 import i18n from './i18n';
 import { Popup } from './components/popup/popup';
 import { VisualRpcProvider } from './visual/VisualRpcProvider'
@@ -24,9 +26,25 @@ export const GameIdContext = React.createContext<string>(undefined);
 function App({ owner, repo }: { owner?: string, repo?: string } = {}) {
 
   const params = useParams()
-  const gameId = "g/" + (owner ?? params.owner) + "/" + (repo ?? params.repo)
+  const gameOwner = owner ?? params.owner
+  const gameRepo = repo ?? params.repo
+  const gameId = "g/" + gameOwner + "/" + gameRepo
   const levelId = parseInt(params.levelId)
   const worldId = params.worldId
+
+  // A game with the neutral palette (`VisualNeutralPalette`) is drawn in greys and in
+  // the colours of the world being played. Until the game's data is here, the look it
+  // had last time stands in.
+  const gameInfo = useGetGameInfoQuery({ game: gameId }, { skip: !gameOwner || !gameRepo })
+  const visualStyle = gameInfo.data
+    ? (gameInfo.data.visualNeutralPalette ? 'neutral' : undefined)
+    : loadGameVisualStyle(gameId)
+  const worldScheme = visualStyle === 'neutral'
+    ? worldSchemeOf(gameInfo.data?.worlds?.nodes, worldId)
+    : undefined
+  React.useEffect(() => {
+    if (gameInfo.data) saveGameVisualStyle(gameId, gameInfo.data.visualNeutralPalette ? 'neutral' : undefined)
+  }, [gameId, gameInfo.data])
 
   const {
     mobile,
@@ -81,10 +99,16 @@ function App({ owner, repo }: { owner?: string, repo?: string } = {}) {
       document.head.appendChild(colorScheme)
     }
     colorScheme.content = scheme
-  }, [isVisualLightMode])
+  }, [isVisualLightMode, visualStyle])
 
   return (
-    <div className="app" data-visual-theme={isVisualLightMode ? 'light' : 'dark'} data-game-id={gameId}>
+    <div
+      className="app"
+      data-visual-theme={isVisualLightMode ? 'light' : 'dark'}
+      data-game-id={gameId}
+      data-visual-style={visualStyle}
+      data-world-scheme={worldScheme}
+    >
       <GameIdContext.Provider value={gameId}>
           <WorldLevelIdContext.Provider value={{worldId, levelId}}>
           <PreferencesContext.Provider value={{

@@ -11,6 +11,8 @@ type HarnessWindow = Cypress.AUTWindow & {
   __visualTestHarness?: {
     rewriteGoalInTransform(theoremName: string, workingSide?: 'left' | 'right', path?: number[], isReverse?: boolean): Promise<void>
     dragHypToGoal(hypName: string): Promise<void>
+    dragHypToHyp(sourceName: string, targetName: string): Promise<void>
+    dragTheoremToGoal(theoremName: string): Promise<void>
     dragTacticToHyp(tacticName: string, hypName: string): Promise<void>
     clickGoal(playTactic?: string): Promise<void>
     clickHyp(hypName: string): Promise<void>
@@ -345,8 +347,8 @@ describe('Natural Numbers Video Game', () => {
     })
     // A world's title is grey until one of its levels can be played.
     const titleOf = (text: string) => cy.contains('[data-testid="path-map-world-label"]', text)
-    // The grey of what can't be used yet (`--pal-inactive`).
-    const lockedTitle = 'rgb(100, 116, 139)'
+    // The grey of what can't be used yet (`--pal-inactive` in the neutral palette).
+    const lockedTitle = 'rgb(115, 115, 115)'
     titleOf('Rewrite World').should('have.attr', 'data-unlocked', 'false').and('have.css', 'fill', lockedTitle)
     titleOf('Proposition World').should('have.attr', 'data-unlocked', 'false').and('have.css', 'fill', lockedTitle)
     titleOf('Successor World').should('have.attr', 'data-unlocked', 'false').and('have.css', 'fill', lockedTitle)
@@ -506,13 +508,14 @@ describe('Natural Numbers Video Game', () => {
     mapLevel('PropositionRight', 7).should('contain.text', '14')
     mapLevel('PropositionRight', 8).should('contain.text', '15')
     mapLevel('PropositionBonus', 1).should('contain.text', 'A1')
-    mapLevel('PropositionBonusB', 3).should('contain.text', 'B3')
+    // The LEM branch is B1 alone.
+    mapLevel('PropositionBonusB', 2).should('not.exist')
     mapLevel('SuccessorJoined', 1).should('contain.text', '4')
     mapLevel('SuccessorJoined', 3).should('contain.text', '6')
     mapLevel('Neq', 1).should('contain.text', '0')
-    mapLevel('Neq', 8).should('contain.text', '7')
-    mapLevel('NeqJoined', 1).should('contain.text', '8')
-    mapLevel('NeqBoss', 1).should('contain.text', '9')
+    mapLevel('Neq', 9).should('contain.text', '8')
+    mapLevel('NeqJoined', 1).should('contain.text', '9')
+    mapLevel('NeqBoss', 1).should('contain.text', '10')
     mapLevel('PowerBonus', 1).should('contain.text', 'A1')
     mapLevel('Outro', 1).should('have.attr', 'data-text-level', 'true')
     // The barrier: nothing leads past Successor World's boss yet.
@@ -527,7 +530,7 @@ describe('Natural Numbers Video Game', () => {
         .getBoundingClientRect()
       return { x: box.left + box.width / 2, y: box.top + box.height / 2 }
     }
-    cy.get('[data-testid="path-map-level"]').should('have.length', 98).then($levels => {
+    cy.get('[data-testid="path-map-level"]').should('have.length', 97).then($levels => {
       // ≤ World leaves Advanced Addition World to the right, and Advanced
       // Multiplication World carries on below it.
       expect(centre('LessOrEqual', 1).x).to.be.greaterThan(centre('AdvAddition', 5).x + 50)
@@ -643,7 +646,7 @@ describe('Natural Numbers Video Game', () => {
     // Everything The End follows but the ≠ boss: it stays locked, with two of its paths lit.
     const done = {
       Intro: 1, Rewrite: 6, Proposition: 8, PropositionRight: 8, Successor: 3, SuccessorJoined: 3, Induction: 4,
-      Neq: 8, NeqJoined: 1, Multiplication: 9, Power: 9, AdvAddition: 5, LessOrEqual: 10, AdvMultiplication: 10,
+      Neq: 9, NeqJoined: 1, Multiplication: 9, Power: 9, AdvAddition: 5, LessOrEqual: 10, AdvMultiplication: 10,
     }
     visitWithProgress(done)
     mapLevel('Outro', 1).should('have.attr', 'data-state', 'locked')
@@ -699,16 +702,20 @@ describe('Natural Numbers Video Game', () => {
     cy.get('[data-testid="rewrite-check"]').should('be.visible')
     cy.wait(400)
     arrowStopsShortOf('.check-guide-arrow', '[data-testid="rewrite-check"]')
-    // A plain button: its mark is the orange of an open goal's card while it waits to
-    // be clicked, with no orange outline, no glow and no pulsing.
-    cy.get('[data-testid="rewrite-check"]').should('have.css', 'color', 'rgb(234, 179, 8)')
-      .and('not.have.css', 'border-top-color', 'rgb(234, 179, 8)')
+    // A plain button: its mark is the grey of an open goal's card while it waits to be
+    // clicked (`--pal-goal` in the neutral palette), with no outline of that colour, no
+    // glow and no pulsing.
+    cy.get('[data-testid="rewrite-check"]').should('have.css', 'color', 'rgb(163, 163, 163)')
+      .and('not.have.css', 'border-top-color', 'rgb(163, 163, 163)')
       .and('have.css', 'border-top-width', '1px')
       .and('have.css', 'box-shadow', 'none')
       .and('have.css', 'animation-iteration-count', '1')
     check()
-    cy.get('[data-testid="rewrite-check"]').should('not.have.css', 'color', 'rgb(234, 179, 8)')
+    // Clicked, it lights up in the world's first colour (Rewriting World's lantern red),
+    // and so does the finished level's tick.
+    cy.get('[data-testid="rewrite-check"]').should('have.css', 'background-color', 'rgb(255, 107, 94)')
     cy.get('.visual-header.completed', { timeout: LOAD_TIMEOUT }).should('exist')
+    cy.get('.visual-header-check').filter(':visible').first().should('have.css', 'color', 'rgb(255, 107, 94)')
     // The hint stays up once the level is finished.
     lessonsShouldContain('check mark')
 
@@ -1479,7 +1486,7 @@ describe('Natural Numbers Video Game', () => {
     cy.get('.visual-map-theme-toggle').click()
     cy.get('.app').should('have.attr', 'data-visual-theme', 'light')
     cy.document().its('documentElement').should(html => {
-      expect(html.style.backgroundColor).to.equal('rgb(248, 250, 252)')
+      expect(html.style.backgroundColor).to.equal('rgb(250, 250, 250)')
     })
 
     // A reload never paints the app dark first.
@@ -1648,7 +1655,8 @@ describe('Natural Numbers Video Game', () => {
     cy.get('.tr-rule-card[data-rule-label="add_zero"]').filter(':visible').first().then($card => {
       const border = getComputedStyle($card[0]!)
       expect(border.borderTopStyle).to.equal('double')
-      expect(border.borderTopColor, "the theorems' blue").to.equal('rgba(96, 165, 250, 0.4)')
+      // The theorems' colour: Successor World's second, where the classic palette has blue.
+      expect(border.borderTopColor, "the theorems' colour").to.equal('rgba(82, 211, 187, 0.4)')
       expect(getComputedStyle($card[0]!, '::after').content, 'no outline of its own inside').to.equal('none')
     })
     rewrite('MyNat.one_eq_succ_zero', 'left', [2])
@@ -1760,42 +1768,77 @@ describe('Natural Numbers Video Game', () => {
     cy.contains('Try simplifying the hypotheses before editing the goal.').should('be.visible')
   })
 
-  it('specializes `reflection` by hand, then drags it onto the other goals', () => {
+  it('walks through Specialization Mode in The Third Mode?', () => {
     openCanvasLevel('Neq', 4)
-    headerShouldNameLevel('3', 'reflection')
-    clickGoal()
-    goalShouldBe('S 0 = S 0')
+    headerShouldNameLevel('3', 'The Third Mode?')
+    goalShouldBe('y = 0')
+    cy.get('[data-testid="hyp-card"][data-hyp-type="3 + 3 = 3 + 3 → y = 0"]').should('exist')
     // A hint above the inventory points at the new theorem.
     hintShouldContain("We've unlocked a new proposition")
     arrowStopsShortOf('.combining-instruction-arrow', '[data-testid="theorem-tray-card"][data-theorem-label="reflection"]')
     notProcessing()
     cy.get('[data-testid="theorem-tray-card"][data-theorem-label="reflection"]').click()
 
-    // Specialization mode, a step at a time, with the game's `S`.
-    hintShouldContain('We\'ve now entered specialization mode')
-    cy.get('[data-brick-id="fn_succ"]').should('contain.text', 'S(')
-    cy.get('[data-brick-id="fn_succ"]').click()
-    hintShouldContain('Now drag the')
-    cy.get('[data-brick-id="num_0"]').click()
+    // Specialization Mode, a step at a time. Its hints sit under the header, in the
+    // middle, clear of the Back button.
+    hintShouldContain('We\'ve now entered Specialization Mode')
+    cy.get('[data-testid="specialize-lessons"]').then($lessons => {
+      const lessons = $lessons[0]!.getBoundingClientRect()
+      const back = Cypress.$('.tr-construction-overlay .tr-back-btn')[0]!.getBoundingClientRect()
+      const header = Cypress.$('.tr-construction-overlay .visual-header')[0]!.getBoundingClientRect()
+      expect(lessons.top, 'below the header').to.be.at.least(header.bottom)
+      expect(lessons.left, 'clear of Back').to.be.greaterThan(back.right)
+      // In the middle of what the open proof sidebar leaves of the page.
+      const sidebar = Cypress.$('.proof-sidebar.open .proof-sidebar-inner')[0]?.getBoundingClientRect().right ?? 0
+      expect(lessons.left + lessons.width / 2, 'in the middle').to.be.closeTo((sidebar + header.right) / 2, 2)
+    })
+    cy.get('[data-brick-id="fn_add"]').click()
+    hintShouldContain('Now we can slot in the')
+    cy.get('[data-brick-id="num_3"]').click()
+    hintShouldContain('Now we can slot in the')
+    cy.get('[data-brick-id="num_3"]').click()
     hintShouldContain('to return to Proposition Mode')
     arrowStopsShortOf('.specialize-guide-arrow', '[data-testid="specialize-done"]')
     cy.get('[data-testid="specialize-done"]').click()
-    goalHintShouldContain('Now that we have the proposition we need')
+    cy.get('.tr-construction-overlay', { timeout: LOAD_TIMEOUT }).should('not.exist')
+    // Back on the canvas with `3 + 3 = 3 + 3`, the opening hint is gone.
     hypShouldExist('thm_h')
-    dragToGoal('thm_h')
+    cy.contains("We've unlocked a new proposition").should('not.exist')
+    harness(h => h.dragHypToHyp('thm_h', 'hy'))
+    cy.get('[data-testid="hyp-card"][data-hyp-type="y = 0"]', { timeout: LOAD_TIMEOUT }).should('exist')
+    dragCardToGoal('y = 0')
+    shouldBeCompleted()
+  })
 
-    // The other goals: drag `reflection` straight onto them.
+  it('matches `reflection` to each goal it is dragged onto, in Pattern Matching', () => {
+    openCanvasLevel('Neq', 5)
+    headerShouldNameLevel('4', 'Pattern Matching')
+    goalHintShouldContain('straight to the goal to automatically match it')
+    clickGoal()
+    goalShouldBe('S 0 = S 0')
+    harness(h => h.dragTheoremToGoal('MyNat.reflection'))
     nextUnsolvedBranch()
-    goalShouldBe('1 = 1 ∧ 2 = 2')
-    cy.contains('Now that we have the proposition we need').should('not.exist')
+    goalShouldBe('1 = 1 ∧ 2 + 2 + 2 = 2 + 2 + 2')
     clickGoal()
     goalShouldBe('1 = 1')
-    hintShouldContain('You can also drag general propositions to the goal')
     harness(h => h.dragTheoremToGoal('MyNat.reflection'))
     nextUnsolvedBranch()
-    goalShouldBe('2 = 2')
+    goalShouldBe('2 + 2 + 2 = 2 + 2 + 2')
     harness(h => h.dragTheoremToGoal('MyNat.reflection'))
     shouldBeCompleted()
+  })
+
+  it('proves `one_ne_zero` by swapping the hypothesis round for `zero_ne_succ`', () => {
+    openCanvasLevel('Neq', 8)
+    headerShouldNameLevel('7', 'one_ne_zero')
+    goalShouldBe('1 ≠ 0')
+    trayShouldHaveCard('zero_ne_succ', true)
+    // `zero_ne_one` comes with finishing this level, in the next one.
+    trayShouldHaveCard('zero_ne_one', false)
+    openCanvasLevel('Neq', 9)
+    headerShouldNameLevel('8', '2 ≠ 4')
+    trayShouldHaveCard('zero_ne_one', true)
+    trayShouldHaveCard('one_ne_zero', true)
   })
 
   it('proves an equality as a proposition, with Rewrite Mode off for the goal', () => {
@@ -1816,11 +1859,11 @@ describe('Natural Numbers Video Game', () => {
     openCanvasLevel('Neq', 2)
     headerShouldNameLevel('1', 'Equalities are Propositions (1)')
     goalHintShouldContain('reverse the direction of an equality')
-    clickGoal()
-    goalShouldBe('(x = 1 → y = 2) → 2 = y')
-    clickGoal()
+    // The two hypotheses are given.
     goalShouldBe('2 = y')
-    harness(h => h.openHypTransform('h'))
+    hypShouldExist('hx')
+    hypShouldExist('hy')
+    harness(h => h.openHypTransform('hx'))
     cy.get('.tr-rule-dock[data-layout-ready="true"]', { timeout: LOAD_TIMEOUT }).should('exist')
     relationShouldBe('1 = x')
     hintShouldContain('Use the swap button')
@@ -1842,16 +1885,16 @@ describe('Natural Numbers Video Game', () => {
     cy.get('.tr-back-btn').click()
     cy.get('.tr-transformation-overlay').should('not.exist')
     // `x = 1` feeds the implication; its result swaps the same way.
-    harness(h => h.dragHypToHyp('h', 'h1'))
-    hypShouldExist('h2')
-    harness(h => h.openHypTransform('h2'))
+    harness(h => h.dragHypToHyp('hx', 'hy'))
+    hypShouldExist('h')
+    harness(h => h.openHypTransform('h'))
     cy.get('.tr-rule-dock[data-layout-ready="true"]', { timeout: LOAD_TIMEOUT }).should('exist')
     relationShouldBe('y = 2')
     cy.get('.tr-swap-btn').click()
     relationShouldBe('2 = y')
     cy.get('.tr-back-btn').click()
     cy.get('.tr-transformation-overlay').should('not.exist')
-    dragToGoal('h2')
+    dragToGoal('h')
     shouldBeCompleted()
   })
 
@@ -1965,7 +2008,7 @@ describe('Natural Numbers Video Game', () => {
   it('shows the ≠ boss its hint until induction has been done twice, the right way round', () => {
     const hint = 'You may want to revisit this level'
     openCanvasLevel('NeqBoss', 1)
-    headerShouldNameLevel('9', 'Equality in ℕ is Decidable (≠ World Boss)')
+    headerShouldNameLevel('10', 'Equality in ℕ is Decidable (≠ World Boss)')
     goalShouldBe('∀ (a b : ℕ), a = b ∨ a ≠ b')
     goalHintShouldContain(hint)
     // Fix `a`, induct on it, fix `b`: the hint is still up.
@@ -2085,105 +2128,123 @@ describe('Natural Numbers Video Game', () => {
     withHyp(type, (name, win) => (win as HarnessWindow).__visualTestHarness!.clickHyp(name))
   }
 
-  it('plays bonus B2: excluded middle and double negation elimination, each from the other', () => {
-    openCanvasLevel('PropositionBonusB', 2)
-    headerShouldNameLevel('B2', 'Double Elimination is Equivalent To LEM')
-    goalShouldBe('(∀ (P : Prop), P ∨ ¬P) ↔ ∀ (P : Prop), ¬¬P → P')
+  it('keeps a level\'s variables in a column of their own, where they only change places', () => {
+    openCanvasLevel('Proposition', 3)
+    headerShouldNameLevel('2', 'Implications (1)')
+    const variables = '[data-testid="type-column"] [data-testid="hyp-card"]'
+    const namesShouldBe = (expected: string[]) => cy.get(variables).should($cards => {
+      expect([...$cards].map(card => card.getAttribute('data-hyp-name'))).to.deep.equal(expected)
+    })
+    namesShouldBe(['A', 'B'])
+    // The column runs down the left of the canvas, under the header, and the other
+    // cards keep clear of it.
     clickGoal()
-    goalShouldBe('(∀ (P : Prop), P ∨ ¬P) → ∀ (P : Prop), ¬¬P → P')
-    clickGoal()
-    goalShouldBe('∀ (P : Prop), ¬¬P → P')
-    clickGoal()
-    goalShouldBe('¬¬P → P')
-    clickGoal()
-    goalShouldBe('P')
-    // The specialization view builds a proposition, from everything this world has.
-    withHyp('∀ (P : Prop), P ∨ ¬P', name => cy.get(cardNamed(name)).filter(':visible').first().click())
-    cy.get('.tr-construction-overlay', { timeout: LOAD_TIMEOUT }).should('be.visible')
-    for (const brick of ['var_P', 'const_False', 'fn_not', 'fn_and', 'fn_or', 'fn_imp', 'fn_iff']) {
-      cy.get(`[data-brick-id="${brick}"]`).should('exist')
+    goalShouldBe('(A → B) → B')
+    hypShouldExist('h')
+    cy.get('[data-testid="type-column"]').then($column => {
+      const column = $column[0]!.getBoundingClientRect()
+      const header = Cypress.$('.visual-header')[0]!.getBoundingClientRect()
+      // At the left edge of the canvas, which starts where the open proof sidebar ends.
+      const sidebar = Cypress.$('.proof-sidebar.open .proof-sidebar-inner')[0]?.getBoundingClientRect().right ?? 0
+      expect(column.left, 'at the left edge').to.be.closeTo(sidebar, 1)
+      expect(column.top, 'under the header').to.be.at.least(header.bottom)
+      const card = Cypress.$('[data-testid="hyp-card"][data-hyp-name="h"]')[0]!.getBoundingClientRect()
+      expect(card.left, 'a proposition is right of the column').to.be.greaterThan(column.right)
+    })
+
+    // Dragged far out to the right and down, `A` stays in its column and moves below `B`.
+    const drag = (name: string, dx: number, dy: number, during?: () => void) => {
+      cy.get(`${variables}[data-hyp-name="${name}"]`).then($card => {
+        const rect = $card[0]!.getBoundingClientRect()
+        const x = rect.left + rect.width / 2
+        const y = rect.top + rect.height / 2
+        const at = (clientX: number, clientY: number) => ({ clientX, clientY, pointerId: 7, isPrimary: true, button: 0, force: true })
+        cy.wrap($card).trigger('pointerdown', at(x, y))
+        cy.get('body').trigger('pointermove', at(x + dx / 2, y + dy / 2)).trigger('pointermove', at(x + dx, y + dy))
+        during?.()
+        cy.get('body').trigger('pointerup', at(x + dx, y + dy))
+      })
     }
-    cy.get('[data-brick-id="var_P"]').click()
-    cy.get('[data-testid="specialize-done"]').click()
-    cy.get('.tr-construction-overlay', { timeout: LOAD_TIMEOUT }).should('not.exist')
-    clickHypOfType('P ∨ ¬P')
-    hypShouldExist('thm_left')
-    dragTypeToGoal('P')
-    nextUnsolvedBranch()
-    hypShouldExist('thm_right')
-    contradict('¬P', '¬¬P')
-    nextUnsolvedBranch()
-    // The other direction: double negation elimination at `P ∨ ¬P` leaves B1's goal.
-    goalShouldBe('(∀ (P : Prop), ¬¬P → P) → ∀ (P : Prop), P ∨ ¬P')
-    clickGoal()
-    goalShouldBe('∀ (P : Prop), P ∨ ¬P')
-    clickGoal()
-    goalShouldBe('P ∨ ¬P')
-    specializeTo('∀ (P : Prop), ¬¬P → P', ['fn_or', 'var_P', 'fn_not', 'var_P'])
-    dragTypeToGoal('¬¬(P ∨ ¬P) → P ∨ ¬P')
-    goalShouldBe('¬¬(P ∨ ¬P)')
-    clickGoal()
-    goalShouldBe('False')
-    dragTypeToGoal('¬(P ∨ ¬P)')
-    goalShouldBe('P ∨ ¬P')
-    clickGoal('click_goal_right')
-    goalShouldBe('¬P')
-    clickGoal()
-    goalShouldBe('False')
-    dragTypeToGoal('¬(P ∨ ¬P)')
-    goalShouldBe('P ∨ ¬P')
-    clickGoal('click_goal_left')
-    goalShouldBe('P')
-    dragTypeToGoal('P')
-    shouldBeCompleted()
+    drag('A', 500, 95, () => {
+      cy.get('.hyp-overlay-card').should('be.visible').then($dragged => {
+        const dragged = $dragged[0]!.getBoundingClientRect()
+        const column = Cypress.$('[data-testid="type-column"]')[0]!.getBoundingClientRect()
+        expect(dragged.left, 'still inside the column').to.be.at.least(column.left)
+        expect(dragged.right, 'still inside the column').to.be.at.most(column.right)
+      })
+    })
+    namesShouldBe(['B', 'A'])
+    // Dropped over the goal or over a proposition, a variable makes no move in the proof.
+    cy.get('[data-testid="goal-card"]').then($goal => {
+      const goal = $goal[0]!.getBoundingClientRect()
+      const card = Cypress.$(`${variables}[data-hyp-name="B"]`)[0]!.getBoundingClientRect()
+      drag('B', goal.left - card.left, goal.top - card.top)
+    })
+    cy.get(variables).should('have.length', 2)
+    cy.window().then(win => {
+      const log = JSON.parse(win.localStorage.getItem(
+        Object.keys(win.localStorage).find(name => name.startsWith('playlog/'))!) ?? '[]') as Array<{ playTactic: string }>
+      expect(log.map(entry => entry.playTactic), 'only the click on the goal').to.deep.equal(['click_goal'])
+    })
+    goalShouldBe('(A → B) → B')
+
+    // The Proof tab is the first of the controls at the bottom left, before Reset and Undo.
+    cy.get('.proof-sidebar-tab').should('not.exist')
+    cy.get('.visual-page:not(.tr-overlay) .tr-controls').then($controls => {
+      const [tab, reset, undo] = [...$controls.children()].map(child => child.getBoundingClientRect())
+      expect($controls.children().first().attr('data-testid')).to.equal('proof-tab')
+      expect(tab!.right, 'Proof, then Reset').to.be.at.most(reset!.left)
+      expect(reset!.right, 'Reset, then Undo').to.be.at.most(undo!.left)
+      const column = Cypress.$('[data-testid="type-column"]')[0]!.getBoundingClientRect()
+      expect(tab!.top, 'under the column').to.be.at.least(column.bottom - 1)
+    })
+    // It closes the proof sidebar, which starts open on a desktop, and opens it again;
+    // the controls stay beside the sidebar's edge either way.
+    cy.get('.proof-sidebar').should('have.class', 'open')
+    cy.get('[data-testid="proof-tab"]').filter(':visible').first().click()
+    cy.get('.proof-sidebar').should('not.have.class', 'open')
+    cy.get('[data-testid="proof-tab"]').filter(':visible').first().should($tab => {
+      expect($tab[0]!.getBoundingClientRect().left, 'at the left edge').to.be.closeTo(0, 1)
+    })
+    cy.get('[data-testid="proof-tab"]').filter(':visible').first().click()
+    cy.get('.proof-sidebar').should('have.class', 'open')
+    cy.get('[data-testid="proof-tab"]').filter(':visible').first().should($tab => {
+      const sidebar = Cypress.$('.proof-sidebar.open .proof-sidebar-inner')[0]!.getBoundingClientRect().right
+      expect($tab[0]!.getBoundingClientRect().left, 'at the sidebar edge').to.be.closeTo(sidebar, 1)
+    })
   })
 
-  it('plays bonus B3 with the theorem of B2 from the inventory', () => {
-    openCanvasLevel('PropositionBonusB', 3)
-    headerShouldNameLevel('B3', "Peirce's Law is Equivalent To LEM")
-    trayShouldHaveCard('lem_iff_double_elimination', true)
+  it('still takes a tactic dropped on a variable in the column', () => {
+    openCanvasLevel('Induction', 1)
     clickGoal()
-    goalShouldBe('(∀ (P : Prop), P ∨ ¬P) → ∀ (P Q : Prop), ((P → Q) → P) → P')
-    clickGoal()
-    goalShouldBe('∀ (P Q : Prop), ((P → Q) → P) → P')
-    clickGoal()
-    goalShouldBe('∀ (Q : Prop), ((P → Q) → P) → P')
-    clickGoal()
-    goalShouldBe('((P → Q) → P) → P')
-    clickGoal()
-    goalShouldBe('P')
-    specializeTo('∀ (P : Prop), P ∨ ¬P', ['var_P'])
-    clickHypOfType('P ∨ ¬P')
-    hypShouldExist('thm_left')
-    dragTypeToGoal('P')
-    nextUnsolvedBranch()
-    hypShouldExist('thm_right')
-    dragTypeToGoal('(P → Q) → P')
-    goalShouldBe('P → Q')
-    clickGoal()
-    goalShouldBe('Q')
-    contradict('P', '¬P')
-    nextUnsolvedBranch()
-    // The other direction: B2's theorem turns excluded middle into double negation
-    // elimination, which Peirce's law at `P` and `False` proves backwards.
-    goalShouldBe('(∀ (P Q : Prop), ((P → Q) → P) → P) → ∀ (P : Prop), P ∨ ¬P')
-    clickGoal()
-    goalShouldBe('∀ (P : Prop), P ∨ ¬P')
-    harness(h => (h as unknown as { dragTheoremToGoal(name: string): Promise<void> })
-      .dragTheoremToGoal('lem_iff_double_elimination'))
-    goalShouldBe('∀ (P : Prop), ¬¬P → P')
-    clickGoal()
-    goalShouldBe('¬¬P → P')
-    clickGoal()
-    goalShouldBe('P')
-    specializeTo('∀ (P Q : Prop), ((P → Q) → P) → P', ['var_P'])
-    specializeTo('∀ (Q : Prop), ((P → Q) → P) → P', ['const_False'])
-    dragTypeToGoal('((P → False) → P) → P')
-    goalShouldBe('(P → False) → P')
-    clickGoal()
-    goalShouldBe('P')
-    contradict('P → False', '¬¬P')
-    shouldBeCompleted()
+    goalShouldBe('0 + n = n')
+    cy.get('[data-testid="type-column"] [data-testid="hyp-card"][data-hyp-name="n"]').should('be.visible')
+    // The hint's arrow runs from the tactic to the variable's card in the column.
+    arrowStopsShortOf('.tactic-hyp-instruction-arrow', '[data-testid="type-column"] [data-testid="hyp-card"][data-hyp-name="n"]')
+    notProcessing()
+    dragWithPointer('[data-tactic-name="induction"]', '[data-testid="type-column"] [data-testid="hyp-card"][data-hyp-name="n"]')
+    goalShouldBe('0 + 0 = 0')
+  })
+
+  it('fits the map to the window, a phone\'s included, so it never scrolls sideways', () => {
+    const fits = () => {
+      cy.get('[data-testid="visual-world-map"]', { timeout: LOAD_TIMEOUT }).should($scroller => {
+        const scroller = $scroller[0]!
+        expect(scroller.scrollWidth, 'nothing to scroll sideways').to.be.at.most(scroller.clientWidth)
+        const map = scroller.querySelector('[data-testid="visual-path-map"]')!.getBoundingClientRect()
+        const box = scroller.getBoundingClientRect()
+        expect(map.left, 'the map starts inside').to.be.at.least(box.left)
+        expect(map.right, 'and ends inside').to.be.at.most(box.right)
+      })
+    }
+    visit(MAP, { fresh: true })
+    mapLevel('Intro', 1).should('exist')
+    fits()
+    for (const [width, height] of [[390, 844], [844, 390], [1024, 600], [2560, 1440]] as const) {
+      cy.viewport(width, height)
+      cy.wait(300)
+      fits()
+    }
   })
 
   it('merges a hypothesis dropped on an identical one', () => {

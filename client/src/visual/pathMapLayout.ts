@@ -151,6 +151,9 @@ function dedupeEdges(edges: readonly (readonly string[])[]): [string, string][] 
 export interface PathMapLayoutOptions {
   /** Horizontal distance between columns. */
   columnWidth?: number
+  /** The colour of worlds that name none; without it they get the unused colours of
+   * `PATH_MAP_COLORS` in map order. */
+  defaultColor?: string
 }
 
 export function computePathMapLayout(input: PathMapInput, options: PathMapLayoutOptions = {}): PathMapLayout {
@@ -372,12 +375,12 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     .filter(world => color[world] === undefined && !bonusOf(world) && !continuesOf(world))
     .sort((a, b) => (column[a]! - column[b]!) || (row[a]![levelsOf[a]![0]!]! - row[b]![levelsOf[b]![0]!]!) || a.localeCompare(b))
   uncoloured.forEach((world, index) => {
-    color[world] = palette[index % Math.max(1, palette.length)] ?? PATH_MAP_COLORS[0]!
+    color[world] = options.defaultColor ?? palette[index % Math.max(1, palette.length)] ?? PATH_MAP_COLORS[0]!
   })
   const colorOf = (world: string): string => {
     if (color[world] !== undefined) return color[world]!
     const extended = bonusOf(world)?.world ?? continuesOf(world)
-    color[world] = extended ? colorOf(extended) : PATH_MAP_COLORS[0]!
+    color[world] = extended ? colorOf(extended) : options.defaultColor ?? PATH_MAP_COLORS[0]!
     return color[world]!
   }
 

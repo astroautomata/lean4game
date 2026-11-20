@@ -310,6 +310,22 @@ elab "VisualAxioms" names:ident* : command => do
     visualAxioms := names.foldl (fun axioms name =>
       if axioms.contains name.getId then axioms else axioms.push name.getId) game.visualAxioms }
 
+/-- Give the game Visual Lean's neutral look: greys for the page, panels, tabs and
+cards, and the few colours of the world being played (`VisualWorldColor`) for everything
+else. An open goal and Rewrite Mode's check mark are grey, and what a finished goal,
+branch or level lights up in is the world's first colour. Use it in the game file, before
+`MakeGame`. -/
+elab "VisualNeutralPalette" : command => do
+  modifyCurGame fun game => pure { game with visualNeutralPalette := true }
+
+/-- Keep the variables of a level (`n : ℕ`, `A : Prop`) in a column of their own at the
+left of Visual Lean's canvas, on a desktop and on a phone held sideways as in the
+phone's portrait layout. They can be reordered there but not dragged out; tactics are
+still dropped on them. The Proof tab moves down beside the Reset and Undo buttons. Use
+it in the game file, before `MakeGame`. -/
+elab "VisualTypeColumn" : command => do
+  modifyCurGame fun game => pure { game with visualTypeColumn := true }
+
 /-- Draw the Visual Lean world map as paths of individual levels instead of worlds with
 orbiting level dots. Each world is a column of its levels; worlds join along their
 dependencies. Use it in the game file, before `MakeGame`. See also `VisualBonusOf`,
@@ -325,12 +341,17 @@ elab "VisualBonusOf" source:ident level:num : command => do
     visualBonusOf? := some (source.getId, level.getNat) }
 
 /-- Path map: colour of the current world's path, one of `purple`, `blue`, `sky`,
-`teal`, `green`, `amber`, `orange`, `red`, `pink`, `indigo` and `lime`. Worlds without
-one get a colour in map order. Use it in the world file. Example: `VisualWorldColor amber` -/
+`teal`, `green`, `amber`, `orange`, `red`, `pink`, `indigo`, `lime` and `grey`, or one of
+the schemes `lantern`, `aqueduct`, `signal`, `blossom`, `riverside`, `sandstone`,
+`circuit` and `canyon`. Worlds without one get a colour in map order. In a game with
+`VisualNeutralPalette` it is also the world's colours inside its levels (a scheme has
+four of them, a plain colour only its own), and worlds without one are grey.
+Use it in the world file. Example: `VisualWorldColor amber` -/
 elab "VisualWorldColor" color:ident : command => do
   let name := color.getId.toString
   let known := ["purple", "blue", "sky", "teal", "green", "amber", "orange", "red", "pink",
-    "indigo", "lime"]
+    "indigo", "lime", "grey", "lantern", "aqueduct", "signal", "blossom", "riverside",
+    "sandstone", "circuit", "canyon"]
   unless known.contains name do
     throwErrorAt color m!"Unknown colour `{name}`; expected one of {known}"
   modifyCurWorld fun world => pure { world with visualColor? := some name }

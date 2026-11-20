@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useState, useLayoutEffect, useCallback, useEffect, useRef } from 'react'
 import { DndContext, DragEndEvent, DragMoveEvent, DragOverlay, DragStartEvent, PointerSensor, pointerWithin, rectIntersection, useSensor, useSensors, useDroppable } from '@dnd-kit/core'
-import type { CollisionDetection } from '@dnd-kit/core'
+import type { CollisionDetection, Modifier } from '@dnd-kit/core'
 import { TaggedText_stripTags } from '@leanprover/infoview-api'
 import { v4 as uuidv4 } from 'uuid'
 import { flushSync } from 'react-dom'
@@ -20,7 +20,7 @@ import type { ConstructionMode } from './ConstructionView'
 import { contextualizeExistsDisplay, contextualizeReductionForms, replaceIdentifier, splitTopLevelDisequality } from './existsDisplay'
 import { applyEqualityRule, applyTheoremRewrite, exprTreeToNode, formatFormulaText, matchAndCapture, parse, printExpression, substituteVariables } from './expr-engine'
 import type { ExpressionNode } from './expr-types'
-import { interactiveGoalsToStreams, proofStateToCanvas } from './leanToCanvas'
+import { canvasGridStartX, interactiveGoalsToStreams, proofStateToCanvas, variablesAreListed } from './leanToCanvas'
 import { interactionToPlayTactic } from './interactionToTactic'
 import { statementCanTargetGoal } from './goalApplication'
 import { tacticUsesOnBranch } from './tacticUses'
@@ -132,13 +132,21 @@ interface CanvasBounds {
   maxY?: number
 }
 
+interface CollisionOptions {
+  phonePortrait?: boolean
+  /** The level's variables are in a column of their own (`VisualTypeColumn`). */
+  typeColumn?: boolean
+}
+
 function resolveCollisions(
   hyps: HypCardType[],
   obstacleIds: string[] = [],
   canvasBounds: CanvasBounds = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight },
-  options: { phonePortrait?: boolean } = {},
+  options: CollisionOptions = {},
 ): HypCardType[] {
-  if (hyps.length === 0) return hyps
+  // Variables kept in a column of their own (`VisualTypeColumn`) are not on the canvas.
+  const placed = options.typeColumn ? hyps.filter(isMobileTheoremCard) : hyps
+  if (placed.length === 0) return hyps
 
   const items: {
     id: string
@@ -153,7 +161,7 @@ function resolveCollisions(
     /** The goal stack or the proof graph's panel, rather than a card. */
     obstacle?: boolean
   }[] =
-    hyps.map(h => {
+    placed.map(h => {
       const el = document.getElementById(h.id)
       const rect = el?.getBoundingClientRect()
       const width = rect ? rect.width : DEFAULT_WIDTH
@@ -273,7 +281,7 @@ function resolveCollisions(
       let free: typeof candidate | null = null
       for (let slot = 0; slot < Math.max(30, items.length * 3) && !free; slot += 1) {
         const scale = currentVisualInterfaceScale()
-        const left = (80 + (slot % 3) * 280) * scale
+        const left = (canvasGridStartX() + (slot % 3) * 280) * scale
         const top = (130 + Math.floor(slot / 3) * 110) * scale
         const next = {
           left,
@@ -479,12 +487,15 @@ function avoidFreshOversizedCollisions(
 
   // Ordinary fresh cards are obstacles at their unchanged leanToCanvas
   // positions, just like cards carried over from the previous proof state.
+  // Variables in their own column (`VisualTypeColumn`) are not on the canvas.
+  const listed = variablesAreListed()
   for (const card of cards) {
+    if (listed && !isMobileTheoremCard(card)) continue
     if (!oversizedFreshIds.has(card.id)) occupied.push(cardRect(card))
   }
 
   const scale = currentVisualInterfaceScale()
-  const startX = 80 * scale
+  const startX = canvasGridStartX() * scale
   const startY = 130 * scale
   const columnStep = 280 * scale
   const rowStep = 110 * scale
@@ -583,7 +594,7 @@ function stableUpdater<T>(update: (previous: T) => T): (previous: T) => T {
 function resolveCanvasStateCollisions(
   canvas: CanvasState,
   canvasBounds: CanvasBounds,
-  options: { phonePortrait?: boolean } = {},
+  options: CollisionOptions = {},
 ): CanvasState {
   // The goal stack, and on wider screens the proof graph's panel when it shows.
   const obstacleIds = [
@@ -2551,6 +2562,10 @@ interface VisualCanvasProps {
   mulDot?: boolean
   /** A proof of `False` closes any goal in this game (`VisualFastExfalso`). */
   gameFastExfalso?: boolean
+  /** The level's variables sit in a column of their own at the left, and the Proof
+   * tab beside Reset and Undo (`VisualTypeColumn`). Not in the phone's portrait
+   * layout, which has its own column. */
+  typeColumn?: boolean
   onInteraction: (proofBody: string) => Promise<ProofState | null>
   /** Re-check an exact full classic proof body without adding the visual prelude. */
   onValidateProof?: (proofBody: string) => Promise<ProofState | null>
@@ -2851,7 +2866,7 @@ export function VisualCanvas({
   onLevelCompleted, onProofStep, onResetUndone, onGesture, onOpenClassic, onValidateProof, resumeState, onAutosave, proofPrelude = '',
   rewriteOnly = false, hideRewriteDirection = false, hideSwapSides = false, noRewriteMode = false,
   noRewriteTabs = false, noHypothesesTab = false, startTab, tacticUses,
-  emphasizeForall, mulDot = false, gameFastExfalso = false,
+  emphasizeForall, mulDot = false, gameFastExfalso = false, typeColumn = false,
 }: VisualCanvasProps) {
   const { isVisualAutoBranchSwitching, isVisualFastExfalso } =
     React.useContext(PreferencesContext)
@@ -2865,6 +2880,10 @@ export function VisualCanvas({
   const [isPhonePortrait, setIsPhonePortrait] = useState(() => isPhonePortraitViewport())
   const [isPhoneLandscape, setIsPhoneLandscape] = useState(() => isPhoneLandscapeViewport())
   const [mobilePage, setMobilePage] = useState<MobilePage>('main')
+  // `VisualTypeColumn`: variables in their own column, the Proof tab beside Reset.
+  const typeColumnLayout = typeColumn && !isPhonePortrait
+  const typeColumnRef = useRef<HTMLDivElement>(null)
+  const isTypeColumnCard = (card: HypCardType) => typeColumnLayout && !isMobileTheoremCard(card)
   const [tacticHypGuides, setTacticHypGuides] = useState<TacticHypGuide[]>([])
   const [hypGoalGuides, setHypGoalGuides] = useState<HypGoalGuide[]>([])
   const [hypInfoGuides, setHypInfoGuides] = useState<HypInfoGuide[]>([])
@@ -3227,11 +3246,14 @@ export function VisualCanvas({
     // the proof graph's panel) must stop below it.
     const headerBottom = document.querySelector('.visual-header')?.getBoundingClientRect().bottom
     const desktopMinY = headerBottom === undefined ? undefined : Math.max(0, headerBottom - rect.top + 8)
+    // Nor do cards go over the variables' column (`VisualTypeColumn`).
+    const typeColumnRight = typeColumnLayout ? typeColumnRef.current?.getBoundingClientRect().right : undefined
     return {
       left: rect.left,
       top: rect.top,
       width: rect.width,
       height: rect.height,
+      minX: typeColumnRight === undefined ? undefined : Math.max(0, typeColumnRight - rect.left),
       minY: isPhonePortrait ? phoneBounds.minY : desktopMinY,
       maxY: isPhonePortrait ? phoneBounds.maxY : desktopMaxY,
     }
@@ -3278,10 +3300,10 @@ export function VisualCanvas({
     }
     const canvasBounds = getCombiningCanvasBounds()
     setCanvasState(stableUpdater(prev =>
-      resolveCanvasStateCollisions(prev, canvasBounds, { phonePortrait: isPhonePortrait })))
+      resolveCanvasStateCollisions(prev, canvasBounds, { phonePortrait: isPhonePortrait, typeColumn: typeColumnLayout })))
   // `activeStreamId`: another branch's goal can be wider or carry another hint, so
   // its cards are looked at again when the player moves to it.
-  }, [collisionStructureKey, goalStackHeight, goalsTopOverride, isPhonePortrait, showProofSidebar, layoutVersion, trayHeight, proofTree, activeStreamId])
+  }, [collisionStructureKey, goalStackHeight, goalsTopOverride, isPhonePortrait, showProofSidebar, layoutVersion, trayHeight, proofTree, activeStreamId, typeColumnLayout])
 
   useLayoutEffect(() => {
     const panel = proofTreePanelRef.current
@@ -3382,6 +3404,16 @@ export function VisualCanvas({
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
+
+  // A variable in its column (`VisualTypeColumn`) only moves up and down, within the column.
+  const dragModifiers = React.useMemo<Modifier[]>(() => [({ transform, active, activeNodeRect }) => {
+    if (!active?.data.current?.typeColumn) return transform
+    const column = typeColumnRef.current?.getBoundingClientRect()
+    const y = column && activeNodeRect
+      ? Math.max(column.top - activeNodeRect.top, Math.min(column.bottom - activeNodeRect.bottom, transform.y))
+      : transform.y
+    return { ...transform, x: 0, y }
+  }], [])
 
   const collisionDetection = useCallback<CollisionDetection>((args) => {
     // Theorem copies and local cards are both draggable and droppable. When
@@ -4178,7 +4210,7 @@ export function VisualCanvas({
     closeReductionTooltip()
     setActiveDragId(String(event.active.id))
     setActiveDraggedTheorem(isTheoremDrag && theorem ? theorem : null)
-    setActiveDraggedHyp(isPhonePortrait ? draggedHyp : null)
+    setActiveDraggedHyp(isPhonePortrait || (draggedHyp && isTypeColumnCard(draggedHyp)) ? draggedHyp : null)
     setActiveDraggedTheoremSourceId(isTheoremDrag ? String(event.active.id) : null)
     setActiveDraggedTactic(isTacticDrag && tactic ? tactic : null)
   }
@@ -4262,7 +4294,7 @@ export function VisualCanvas({
         })
         return {
           ...stream,
-          hyps: resolveCollisions(moved, obstacleIds, canvasBounds, { phonePortrait: isPhonePortrait }),
+          hyps: resolveCollisions(moved, obstacleIds, canvasBounds, { phonePortrait: isPhonePortrait, typeColumn: typeColumnLayout }),
         }
       })
     }
@@ -4544,6 +4576,37 @@ export function VisualCanvas({
     const refuseDrop = (reason: string, command: string, details: Record<string, unknown> = {}) => {
       lastDragDebugRef.current = { ...lastDragDebugRef.current, refused: reason, ...details }
       onGesture?.({ kind: 'rejected', command, reason })
+    }
+
+    // A variable in its column (`VisualTypeColumn`) is never dragged out of it: wherever
+    // it is let go, it takes the place among the others that it was moved to.
+    if (sourceCard && isTypeColumnCard(sourceCard)) {
+      const draggedCentre = translated ? translated.top + translated.height / 2 : pointerY
+      if (draggedCentre == null) return
+      const sourceKey = hypMobileKey(sourceCard)
+      const otherKeys = orderedMobileVariables
+        .filter(card => hypMobileKey(card) !== sourceKey)
+        .map(card => ({
+          key: hypMobileKey(card),
+          rect: document.getElementById(card.id)?.getBoundingClientRect(),
+        }))
+      const destinationIndex = otherKeys.filter(({ rect }) =>
+        rect !== undefined && rect.top + rect.height / 2 < draggedCentre).length
+      setMobileVisualOrder(prev => {
+        const current = prev.variables.filter(key => key !== sourceKey)
+        const nextVisibleKey = otherKeys[destinationIndex]?.key
+        const previousVisibleKey = otherKeys[destinationIndex - 1]?.key
+        const insertionIndex = nextVisibleKey
+          ? Math.max(0, current.indexOf(nextVisibleKey))
+          : previousVisibleKey
+            ? current.indexOf(previousVisibleKey) + 1
+            : current.length
+        current.splice(Math.max(0, insertionIndex), 0, sourceKey)
+        const unchanged = current.length === prev.variables.length
+          && current.every((key, index) => key === prev.variables[index])
+        return unchanged ? prev : { ...prev, variables: current }
+      })
+      return
     }
 
     // A finished proof can be looked over but not changed: a card dropped on
@@ -7198,7 +7261,16 @@ export function VisualCanvas({
   function copyTestTheoremToCanvas(theoremName: string) {
     const theorem = propositionTheorems.find(candidate => candidate.theoremName === theoremName)
     if (!theorem) throw new Error(`Could not find proposition theorem "${theoremName}"`)
-    flushSync(() => createTheoremCopy(theorem, { x: 96, y: 96 }))
+    // Clear of the variables' column, where a player's drop is kept from too, and
+    // with that column there, below the cards that now start the grid.
+    const bounds = getCombiningCanvasBounds()
+    const left = Math.max(96, (bounds.minX ?? 0) + COLLISION_EDGE_MARGIN)
+    const cardBottoms = typeColumnLayout
+      ? Array.from(combiningCanvasRef.current?.querySelectorAll<HTMLElement>(':scope > [data-testid="hyp-card"]') ?? [])
+        .map(card => card.getBoundingClientRect().bottom - bounds.top)
+      : []
+    const top = cardBottoms.length > 0 ? Math.max(...cardBottoms) + COLLISION_EDGE_MARGIN : 96
+    flushSync(() => createTheoremCopy(theorem, { x: left, y: top }))
   }
 
   async function applyTestDragTacticToHyp(tacticName: string, hypName: string) {
@@ -7564,8 +7636,25 @@ export function VisualCanvas({
     navigateToStream(activeStreamIds[currentStreamIndex + 1]!)
   }
 
+  // With `VisualTypeColumn` the Proof tab is the first of the controls at the bottom
+  // left, in every view, rather than a tab on the sidebar's edge under the header.
+  const proofTab = typeColumnLayout ? (
+    <button
+      type="button"
+      className="proof-tab-btn"
+      data-testid="proof-tab"
+      onClick={() => setProofSidebarOpen(!showProofSidebar)}
+      aria-label={showProofSidebar ? 'Close proof view' : 'Open proof view'}
+      aria-expanded={showProofSidebar}
+    >
+      <span>Proof</span>
+    </button>
+  ) : undefined
+
   const visualPageStyle = {
     '--proof-sidebar-width': !isPhonePortrait && showProofSidebar ? '17.5rem' : '0px',
+    // Nothing for the Back button to clear under the header once the tab has moved.
+    ...(typeColumnLayout ? { '--proof-tab-width': '0px' } : {}),
     '--tray-height': `${trayHeight}px`,
     '--mobile-goal-stack-height': `${goalStackHeight}px`,
   } as React.CSSProperties
@@ -7740,6 +7829,9 @@ export function VisualCanvas({
       draggedHypCard && !hypothesesAreIdentical(draggedHypCard, card)
         && hypothesisDropWouldSubstitute(draggedHypCard, card),
     )
+    const inTypeColumn = mobileList && typeColumnLayout
+    // A variable being moved within its column is not being dropped on anything.
+    const reorderingTypeColumn = Boolean(draggedHypCard && isTypeColumnCard(draggedHypCard))
     return (
       <HypCard
         key={card.id}
@@ -7750,7 +7842,7 @@ export function VisualCanvas({
           marker.hypId === card.id || marker.hypName === (card.hyp.names[0] ?? '')
         )}
         isInteractive={streamInteractionsEnabled}
-        isMovable={streamInteractionsEnabled || (reviewingFinishedProof && !mobileList)}
+        isMovable={streamInteractionsEnabled || (reviewingFinishedProof && (!mobileList || inTypeColumn))}
         isFailing={failingCardId === card.id}
         isClickable={streamInteractionsEnabled && isClickable}
         clickTooltip={clickAction?.tooltip}
@@ -7758,9 +7850,11 @@ export function VisualCanvas({
         isConstructable={streamInteractionsEnabled && isConstructable}
         showDropTarget={activeDraggedTactic
           ? isTacticTarget
-          : activeDragId !== null && activeDragId !== card.id && !blocksHypothesisSubstitution}
+          : activeDragId !== null && activeDragId !== card.id && !blocksHypothesisSubstitution
+            && !reorderingTypeColumn}
         isPotentialTarget={isTacticTarget}
         mobileList={mobileList}
+        typeColumn={inTypeColumn}
         onClickAction={streamInteractionsEnabled && isClickable && displayStream
           ? isConstructable
             ? () => handleHypConstructionClick(displayStream.id, card.id)
@@ -7942,6 +8036,7 @@ export function VisualCanvas({
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
+        modifiers={dragModifiers}
         onDragCancel={() => {
           setActiveDraggedTheorem(null)
           setActiveDraggedHyp(null)
@@ -7955,7 +8050,7 @@ export function VisualCanvas({
         }}
       >
         <div
-          className={`visual-page${isPhonePortrait ? ' phone-portrait' : ''}`}
+          className={`visual-page${isPhonePortrait ? ' phone-portrait' : ''}${typeColumnLayout ? ' type-column-layout' : ''}`}
           data-testid="visual-proof-page"
           data-world-id={worldId}
           data-level-id={String(levelId)}
@@ -8047,7 +8142,12 @@ export function VisualCanvas({
 
 
           <div className="combining-canvas" data-testid="combining-canvas" ref={combiningCanvasRef}>
-            {!isPhonePortrait && visibleHyps.map(card => renderHypCard(card))}
+            {!isPhonePortrait && visibleHyps.filter(card => !isTypeColumnCard(card)).map(card => renderHypCard(card))}
+            {typeColumnLayout && orderedMobileVariables.length > 0 && (
+              <section className="type-column" data-testid="type-column" ref={typeColumnRef} aria-label="Variables">
+                {orderedMobileVariables.map(card => renderHypCard(card, true))}
+              </section>
+            )}
             {!isPhonePortrait && theoremCopies.map(copy => (
               <PropositionTheoremCopyCard
                 key={copy.id}
@@ -8256,11 +8356,12 @@ export function VisualCanvas({
             </div>
           )}
           <div
-            className="tr-controls"
+            className={`tr-controls${proofTab ? ' with-proof-tab' : ''}`}
             style={{
               bottom: `calc(${isPhonePortrait ? '0.65rem' : '2rem'} + ${trayHeight}px)`,
             }}
           >
+            {proofTab}
             <button
               onClick={() => void resetProof()}
               disabled={proofSteps.length === 0}
@@ -8365,16 +8466,18 @@ export function VisualCanvas({
       {/* Proof sidebar — outside DndContext so it stays above the transformation overlay */}
       {!isPhonePortrait && (
       <div className={`proof-sidebar${showProofSidebar ? ' open' : ''}`}>
-        <button
-          className="proof-sidebar-tab"
-          onClick={() => {
-            const next = !showProofSidebar
-            setProofSidebarOpen(next)
-          }}
-          aria-label={showProofSidebar ? 'Close proof view' : 'Open proof view'}
-        >
-          <span>Proof</span>
-        </button>
+        {!typeColumnLayout && (
+          <button
+            className="proof-sidebar-tab"
+            onClick={() => {
+              const next = !showProofSidebar
+              setProofSidebarOpen(next)
+            }}
+            aria-label={showProofSidebar ? 'Close proof view' : 'Open proof view'}
+          >
+            <span>Proof</span>
+          </button>
+        )}
         <div className="proof-sidebar-inner">
           {renderProofToolbar()}
           {renderProofStepList()}
@@ -8396,6 +8499,7 @@ export function VisualCanvas({
           visualInfos={constructionTarget?.kind === 'forall_spec' ? constructionInfos : undefined}
           persistentHints={persistentHints}
           isPhonePortrait={isPhonePortrait}
+          controlsSlot={proofTab}
           onApply={handleConstructionApply}
           onClose={() => {
             onGesture?.({ kind: 'view', command: 'close' })
@@ -8465,6 +8569,7 @@ export function VisualCanvas({
           }}
           rewriteStepCount={transformationVersion}
           isPhonePortrait={isPhonePortrait}
+          controlsSlot={proofTab}
           isReverse={isTransformReverse}
           onIsReverseChange={reverse => {
             onGesture?.({ kind: 'view', command: `direction ${reverse ? 'reverse' : 'forward'}` })

@@ -211,6 +211,23 @@ test('without columns, worlds split off one world spread around it', () => {
   assert.notEqual(node(layout, 'B', 1).color, node(layout, 'C', 1).color)
 })
 
+test('with a default colour, worlds that name none all take it, and their bonuses too', () => {
+  const layout = computePathMapLayout({
+    worlds: {
+      A: { title: 'A', color: 'lantern' },
+      B: { title: 'B' },
+      C: { title: 'C' },
+      Bonus: { title: 'Bonus', bonusOf: { world: 'B', level: 1 } },
+    },
+    edges: [['A', 'B'], ['A', 'C'], ['B', 'Bonus']],
+    worldSize: { A: 1, B: 2, C: 1, Bonus: 1 },
+  }, { defaultColor: 'grey' })
+  assert.equal(node(layout, 'A', 1).color, 'lantern')
+  assert.equal(node(layout, 'B', 1).color, 'grey')
+  assert.equal(node(layout, 'C', 1).color, 'grey')
+  assert.equal(node(layout, 'Bonus', 1).color, 'grey')
+})
+
 test('skipped levels and empty worlds take no place on the map', () => {
   const layout = computePathMapLayout({
     worlds: { A: { title: 'A' }, Hidden: { title: 'Hidden' } },

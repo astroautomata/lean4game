@@ -670,6 +670,12 @@ structure Game where
   /-- Theorems that Visual Lean shows in the axiom colour, whatever inventory tab they
   are filed under (see `VisualAxioms`). -/
   visualAxioms : Array Name := #[]
+  /-- When true, Visual Lean uses greys for its base and the colours of the world being
+  played for the rest (see `VisualNeutralPalette`). -/
+  visualNeutralPalette : Bool := false
+  /-- When true, Visual Lean keeps a level's variables in a column of their own (see
+  `VisualTypeColumn`). -/
+  visualTypeColumn : Bool := false
 deriving Inhabited, ToJson, FromJson
 
 def getGameJson (game : «Game») : Json := Id.run do

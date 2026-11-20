@@ -68,6 +68,11 @@ export interface GameInfo {
   visualNoGoalRfl?: boolean
   /** Theorems shown in the axiom colour (`VisualAxioms`), by full name. */
   visualAxioms?: string[]
+  /** Greys for the base, and the colours of the world being played for the rest
+   * (`VisualNeutralPalette`). */
+  visualNeutralPalette?: boolean
+  /** A level's variables sit in a column of their own (`VisualTypeColumn`). */
+  visualTypeColumn?: boolean
 }
 
 export interface InventoryTile {

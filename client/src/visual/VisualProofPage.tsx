@@ -9,7 +9,7 @@ import { useRetryUntilData } from '../hooks/useRetryUntilData'
 import { useGetGameInfoQuery } from '../state/api'
 import { selectCompleted, selectEntered, levelCompleted, levelEntered } from '../state/progress'
 import { createSolvingId, sendTelemetry } from '../utils/telemetry'
-import { proofStateToCanvas } from './leanToCanvas'
+import { proofStateToCanvas, setTypeColumnLayout } from './leanToCanvas'
 import { decodeAutosave, writeAutosave } from './autosaveStorage'
 import { buildInteractiveProofLine, VisualCanvas, VISUAL_PROOF_AUTOSAVE_VERSION } from './VisualCanvas'
 import type { VisualProofResumeState } from './VisualCanvas'
@@ -360,6 +360,8 @@ export function VisualProofPage() {
   const { isVisualOpenAnyLevel } = useContext(PreferencesContext)
   const gameInfo = useGetGameInfoQuery({ game: gameId })
   useRetryUntilData(gameInfo)
+  // Where fresh cards are laid out depends on it (leanToCanvas).
+  setTypeColumnLayout(gameInfo.data?.visualTypeColumn ?? false)
   const nextLevelLocked = useAppSelector(state => {
     if (isVisualOpenAnyLevel) return false
     const { worlds, worldSize: worldSizes, skippedLevels: skipped, completionNeutralLevels } = gameInfo.data ?? {}
@@ -845,6 +847,7 @@ export function VisualProofPage() {
       emphasizeForall={levelPresentation.emphasizeForall}
       mulDot={levelPresentation.mulDot}
       gameFastExfalso={gameInfo.data?.visualFastExfalso ?? false}
+      typeColumn={gameInfo.data?.visualTypeColumn ?? false}
       worldId={worldId}
       levelId={levelId}
       displayLevelId={displayLevelId}
