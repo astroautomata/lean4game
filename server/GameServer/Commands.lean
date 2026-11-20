@@ -343,9 +343,10 @@ elab "VisualBonusOf" source:ident level:num : command => do
 /-- Path map: colour of the current world's path, one of `purple`, `blue`, `sky`,
 `teal`, `green`, `amber`, `orange`, `red`, `pink`, `indigo`, `lime` and `grey`, or one of
 the schemes `lantern`, `aqueduct`, `signal`, `blossom`, `riverside`, `sandstone`,
-`circuit` and `canyon`. Worlds without one get a colour in map order. In a game with
-`VisualNeutralPalette` it is also the world's colours inside its levels (a scheme has
-four of them, a plain colour only its own), and worlds without one are grey.
+`circuit` and `canyon`. Worlds without one get a colour in map order. The schemes are
+for a game with `VisualNeutralPalette`: there a scheme is also the four colours of the
+world's levels, a world with a plain colour is played in greys, and a world without a
+colour is grey on the map too.
 Use it in the world file. Example: `VisualWorldColor amber` -/
 elab "VisualWorldColor" color:ident : command => do
   let name := color.getId.toString
