@@ -87,6 +87,8 @@ export interface IPreferencesContext extends PreferencesState{
   isVisualFastExfalso: PreferencesState["isVisualFastExfalso"];
   setIsVisualFastExfalso: React.Dispatch<React.SetStateAction<PreferencesState["isVisualFastExfalso"]>>;
   setIsVisualOpenAnyLevel: React.Dispatch<React.SetStateAction<PreferencesState["isVisualOpenAnyLevel"]>>;
+  setIsVisualFullComplete: React.Dispatch<React.SetStateAction<PreferencesState["isVisualFullComplete"]>>;
+  setVisualStyleSetting: React.Dispatch<React.SetStateAction<PreferencesState["visualStyleSetting"]>>;
 }
 
 export const PreferencesContext = React.createContext<IPreferencesContext>({
@@ -99,6 +101,8 @@ export const PreferencesContext = React.createContext<IPreferencesContext>({
   isVisualAutoBranchSwitching: false,
   isVisualFastExfalso: false,
   isVisualOpenAnyLevel: false,
+  isVisualFullComplete: false,
+  visualStyleSetting: 'standard',
   setLayout: () => {},
   setIsSavePreferences: () => {},
   setLanguage: () => {},
@@ -107,6 +111,8 @@ export const PreferencesContext = React.createContext<IPreferencesContext>({
   setIsVisualAutoBranchSwitching: () => {},
   setIsVisualFastExfalso: () => {},
   setIsVisualOpenAnyLevel: () => {},
+  setIsVisualFullComplete: () => {},
+  setVisualStyleSetting: () => {},
 })
 
 export const WorldLevelIdContext = React.createContext<{

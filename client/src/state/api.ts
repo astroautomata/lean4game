@@ -64,6 +64,10 @@ export interface GameInfo {
   visualRewriteCheck?: boolean
   /** The successor function's name for the term builder (`VisualSuccessorName`). */
   visualSuccessorName?: string
+  /** The equation of the game's definition of `a ≤ b`, in `a`, `b` and `c` (`VisualLeDefinition`). */
+  visualLeDefinition?: string
+  /** `cases` and `induction` on `a` name the new number `a1` (`VisualNumberedSplits`). */
+  visualNumberedSplits?: boolean
   /** Clicking a goal `a = a` doesn't close it (`VisualNoGoalRfl`). */
   visualNoGoalRfl?: boolean
   /** Theorems shown in the axiom colour (`VisualAxioms`), by full name. */

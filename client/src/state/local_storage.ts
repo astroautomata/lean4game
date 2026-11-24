@@ -6,6 +6,14 @@ const KEY = "game_progress";
 const VISUAL_AUTO_BRANCH_SWITCH_KEY = "visual_auto_branch_switch";
 const VISUAL_FAST_EXFALSO_KEY = "visual_fast_exfalso";
 const VISUAL_OPEN_ANY_LEVEL_KEY = "visual_open_any_level";
+const VISUAL_STYLE_SETTING_KEY = "visual_style_setting";
+
+/** The "Visual Style" setting of a game with the neutral palette, in the order its
+ * button steps through: the neutral look, the same on black, and the classic palette's
+ * dark scheme. */
+export const VISUAL_STYLE_SETTINGS = ['standard', 'black', 'high-contrast'] as const
+export type VisualStyleSetting = typeof VISUAL_STYLE_SETTINGS[number]
+const VISUAL_FULL_COMPLETE_KEY = "visual_full_complete";
 
 /** Load from browser storage */
 export function loadState() {
@@ -171,6 +179,42 @@ export function loadVisualOpenAnyLevelPreference() {
 export function saveVisualOpenAnyLevelPreference(enabled: boolean) {
   try {
     localStorage.setItem(VISUAL_OPEN_ANY_LEVEL_KEY, JSON.stringify(enabled))
+  } catch (_error) {
+    // Ignore unavailable storage.
+  }
+}
+
+export function loadVisualStyleSettingPreference(): VisualStyleSetting | undefined {
+  try {
+    const value = localStorage.getItem(VISUAL_STYLE_SETTING_KEY)
+    return VISUAL_STYLE_SETTINGS.find(setting => setting === value)
+  } catch (_error) {
+    return undefined
+  }
+}
+
+export function saveVisualStyleSettingPreference(setting: VisualStyleSetting) {
+  try {
+    localStorage.setItem(VISUAL_STYLE_SETTING_KEY, setting)
+  } catch (_error) {
+    // Ignore unavailable storage.
+  }
+}
+
+export function loadVisualFullCompletePreference() {
+  try {
+    const value = localStorage.getItem(VISUAL_FULL_COMPLETE_KEY)
+    if (value === null) return undefined
+    const parsed = JSON.parse(value)
+    return typeof parsed === 'boolean' ? parsed : undefined
+  } catch (_error) {
+    return undefined
+  }
+}
+
+export function saveVisualFullCompletePreference(enabled: boolean) {
+  try {
+    localStorage.setItem(VISUAL_FULL_COMPLETE_KEY, JSON.stringify(enabled))
   } catch (_error) {
     // Ignore unavailable storage.
   }

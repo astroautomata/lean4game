@@ -11,8 +11,9 @@
    is the default, and its second the light scheme, which a game with a path map
    offers beside its menu. Both list the same colours in the same order. The
    second palette, further down, is the neutral one of games with
-   `VisualNeutralPalette`: greys, and a few colours for each world. It too has a
-   dark and a light block, which set only what differs from the classic palette.
+   `VisualNeutralPalette`: one block, since it has no light scheme, with a page
+   and a few colours for each world. It sets only what differs from the classic
+   palette's dark scheme.
 
    What each colour is used at which opacity is in visual.css, right below its
    `@import` of this file; the maps read theirs in VisualPathMap.tsx and
@@ -62,7 +63,8 @@
   --pal-info-text:    147, 197, 253;   /* #93c5fd  A theorem's name; the text accents of hints */
   --pal-hint:         96, 165, 250;    /* #60a5fa  The border of a hint */
   --pal-hint-ring:    96, 165, 250;    /* #60a5fa  The thin ring around a hint on the canvas */
-  --pal-derived:      52, 211, 153;    /* #34d399  Theorem cards in Proposition Mode, and a proposition the player derived */
+  --pal-derived:      52, 211, 153;    /* #34d399  The card of a proposition the player derived or assumed */
+  --pal-theorem:      52, 211, 153;    /* #34d399  Theorem cards in Proposition Mode */
   --pal-derived-tint: 52, 211, 153;    /* #34d399  The tint of a derived proposition's card and of a finished level's header */
   --pal-derived-text: 110, 231, 183;   /* #6ee7b7  A derived proposition's name */
   --pal-integer:      96, 165, 250;    /* #60a5fa  Integer expressions (the Real Numbers Game) */
@@ -165,7 +167,8 @@
   --pal-info-text:    37, 99, 235;     /* #2563eb  A theorem's name; the text accents of hints */
   --pal-hint:         37, 99, 235;     /* #2563eb  The border of a hint */
   --pal-hint-ring:    96, 165, 250;    /* #60a5fa  The thin ring around a hint on the canvas */
-  --pal-derived:      52, 211, 153;    /* #34d399  Theorem cards in Proposition Mode, and a proposition the player derived */
+  --pal-derived:      52, 211, 153;    /* #34d399  The card of a proposition the player derived or assumed */
+  --pal-theorem:      52, 211, 153;    /* #34d399  Theorem cards in Proposition Mode */
   --pal-derived-tint: 16, 185, 129;    /* #10b981  The tint of a derived proposition's card and of a finished level's header */
   --pal-derived-text: 4, 120, 87;      /* #047857  A derived proposition's name */
   --pal-integer:      96, 165, 250;    /* #60a5fa  Integer expressions (the Real Numbers Game) */
@@ -248,216 +251,191 @@
   --pal-accent-text-strong: 17, 94, 89;      /* #115e59 */
 }
 
-/* ══ The neutral palette (games with `VisualNeutralPalette`): dark scheme ══
-   Greys for the page, its panels, tabs and cards, and for everything that is
-   waiting: an open goal, the check mark before it is clicked, a hint. All other
-   colour is the world's: each world has four colours (and the outline of its
-   paths on the map), named by its scheme (`VisualWorldColor lantern`). What the
-   four are used for is in visual.css, under "The neutral look".
+/* ══ The neutral palette (games with `VisualNeutralPalette`) ══
+   One scheme, with no light and dark: a page between the two, and white text.
+   The map is a blackboard's slate, and so are the worlds with no scheme of
+   their own. Every other world has its own page and panels, a muted tone taken
+   from its reference image so that nothing behind the cards draws the eye, and
+   its own colours, named by its scheme (`VisualWorldColor lantern`). What they
+   are used for is in visual.css, under "The neutral look".
 
+     the page     behind everything, from `-bg` at the top left to `-bg-end` at
+                  the bottom right; `-surface` for the header, the lower menu
+                  and the proof graph, `-surface-solid` for menus and tooltips
      the first    what lights up when a goal, a branch or a level is finished;
                   the world's paths and levels on the map
      the second   what the player acts with: drop targets, the current branch,
                   active tabs and toggles, names of hypotheses, theorems as rules
                   in Rewrite Mode, slots of the term builder
-     the third    theorem cards in Proposition Mode, and what the player derived
+     the third    theorem cards in Proposition Mode
      the fourth   tactic cards
+     the fifth    what the player assumed or derived in the level: the cards of
+                  propositions that weren't there at the start
+     incomplete   what is still to do: an open goal, Rewrite Mode's check mark
+                  before it is clicked, an open branch of the proof graph
 
-   Only the Undo and Reset buttons, warnings and errors keep one colour in
-   every world. */
+   Hints are grey, and the Undo and Reset buttons, warnings and errors keep one
+   colour in every world. The player's "Visual Style" setting can put black
+   behind all of it (Standard Black), or leave this palette for the classic
+   one's dark scheme (High Contrast). */
 .app[data-visual-style='neutral'] {
-  /* ── Page ── */
-  --pal-bg-start:      23, 23, 23;      /* #171717  The page behind everything, at the top left of its gradient; also the map's background */
-  --pal-bg-end:        34, 34, 34;      /* #222222  The page at the bottom right of its gradient */
-  --pal-surface:       23, 23, 23;      /* #171717  Panels and bars over the page: the header, the lower menu, the proof graph */
-  --pal-surface-solid: 38, 38, 38;      /* #262626  Opaque panels: menus, dialogs, tooltips */
+  /* ── Page (the map, and worlds with no scheme of their own) ── */
+  --pal-bg-start:      64, 81, 89;      /* #405159  The page behind everything, at the top left of its gradient; also the map's background */
+  --pal-bg-end:        46, 59, 66;      /* #2e3b42  The page at the bottom right of its gradient */
+  --pal-surface:       38, 49, 54;      /* #263136  Panels and bars over the page: the header, the lower menu, the proof graph */
+  --pal-surface-solid: 54, 67, 74;      /* #36434a  Opaque panels: menus, dialogs, tooltips */
   --pal-card:          255, 255, 255;   /* #ffffff  The glass of cards and buttons */
   --pal-line:          255, 255, 255;   /* #ffffff  Hairlines and faint fills: card borders, dividers, the tabs, formula backgrounds */
   --pal-shadow:        0, 0, 0;         /* #000000  Shadows, and the dimming behind a panel */
-  --pal-backdrop:      10, 10, 10;      /* #0a0a0a  The dimmed page behind a text level's dialog */
+  --pal-backdrop:      11, 15, 18;      /* #0b0f12  The dimmed page behind a text level's dialog */
 
   /* ── Text ── */
-  --pal-text:           250, 250, 250;   /* #fafafa  Text */
-  --pal-text-bright:    229, 229, 229;   /* #e5e5e5  Formulas and other text that should stand out a little less than titles */
-  --pal-text-secondary: 163, 163, 163;   /* #a3a3a3  Secondary text: labels, icons, the lines of the proof graph */
-  --pal-text-muted:     115, 115, 115;   /* #737373  Muted text: page numbers, placeholders */
-  --pal-on-accent:      23, 23, 23;      /* #171717  Text on a button in the world's second colour */
-  --pal-on-solid:       23, 23, 23;      /* #171717  Text on a solid colour: a finished level on the map, the check mark once clicked */
-  --pal-inactive:       115, 115, 115;   /* #737373  What can't be used: a locked level's number, a card that won't take the drop */
-  --pal-track:          82, 82, 82;      /* #525252  Paths and levels of the map not reached yet; the dots of a pager */
+  --pal-text:           255, 255, 255;   /* #ffffff  Text */
+  --pal-text-bright:    238, 241, 244;   /* #eef1f4  Formulas and other text that should stand out a little less than titles */
+  --pal-text-secondary: 198, 205, 211;   /* #c6cdd3  Secondary text: labels, icons, the lines of the proof graph */
+  --pal-text-muted:     155, 164, 172;   /* #9ba4ac  Muted text: page numbers, placeholders */
+  --pal-on-accent:      20, 24, 28;      /* #14181c  Text on a button in the world's second colour */
+  --pal-on-solid:       20, 24, 28;      /* #14181c  Text on a solid colour: a finished level on the map, the check mark once clicked */
+  --pal-inactive:       141, 151, 159;   /* #8d979f  What can't be used: a locked level's number, a card that won't take the drop */
+  --pal-track:          104, 119, 128;   /* #687780  Paths and levels of the map not reached yet; the dots of a pager */
 
-  /* ── What is waiting ── */
-  --pal-goal:           163, 163, 163;   /* #a3a3a3  An open goal's outline and glow, and Rewrite Mode's check mark before it is clicked */
-  --pal-goal-label:     163, 163, 163;   /* #a3a3a3  The word GOAL on an open goal, and the glow of a goal under the mouse */
-  --pal-stream-pending: 138, 138, 138;   /* #8a8a8a  An open branch in the proof graph */
-  --pal-hint:           163, 163, 163;   /* #a3a3a3  The border of a hint */
-  --pal-hint-ring:      163, 163, 163;   /* #a3a3a3  The thin ring around a hint on the canvas */
-  --pal-guide-arrow:    115, 115, 115;   /* #737373  The arrows that hints point with */
+  /* ── Hints ── */
+  --pal-hint:        198, 205, 211;   /* #c6cdd3  The border of a hint */
+  --pal-hint-ring:   198, 205, 211;   /* #c6cdd3  The thin ring around a hint on the canvas */
+  --pal-guide-arrow: 155, 164, 172;   /* #9ba4ac  The arrows that hints point with */
 
   /* ── The same in every world ── */
   --pal-warning:     250, 204, 21;    /* #facc15  Warnings, and the Undo button when it can undo */
   --pal-danger:      239, 68, 68;     /* #ef4444  Errors and the Reset button: tints and borders */
   --pal-danger-text: 248, 113, 113;   /* #f87171  Error text */
 
-  /* ── World colours, grey (worlds with no scheme of their own, and the map) ── */
-  --pal-world-grey:      229, 229, 229;   /* #e5e5e5  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-grey-edge: 163, 163, 163;   /* #a3a3a3  The outline of its finished paths and levels on the map */
-  --pal-world-grey-2:    196, 196, 196;   /* #c4c4c4  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-grey-3:    176, 176, 176;   /* #b0b0b0  Third: theorem cards, and what the player derived */
-  --pal-world-grey-4:    154, 154, 154;   /* #9a9a9a  Fourth: tactic cards */
-
-  /* ── World colours, lantern (Rewriting World: red paper lanterns under a steel roof) ── */
-  --pal-world-lantern:      255, 107, 94;    /* #ff6b5e  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-lantern-edge: 194, 54, 44;     /* #c2362c  The outline of its finished paths and levels on the map */
-  --pal-world-lantern-2:    245, 189, 111;   /* #f5bd6f  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-lantern-3:    143, 184, 198;   /* #8fb8c6  Third: theorem cards, and what the player derived */
-  --pal-world-lantern-4:    217, 163, 192;   /* #d9a3c0  Fourth: tactic cards */
-
-  /* ── World colours, aqueduct (Proposition World: blue-green water, rust, a few pink strands) ── */
-  --pal-world-aqueduct:      108, 196, 230;   /* #6cc4e6  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-aqueduct-edge: 44, 127, 160;    /* #2c7fa0  The outline of its finished paths and levels on the map */
-  --pal-world-aqueduct-2:    242, 127, 180;   /* #f27fb4  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-aqueduct-3:    127, 212, 193;   /* #7fd4c1  Third: theorem cards, and what the player derived */
-  --pal-world-aqueduct-4:    220, 145, 114;   /* #dc9172  Fourth: tactic cards */
-
-  /* ── World colours, signal (Successor World: violet rings and white streaks over teal) ── */
-  --pal-world-signal:      169, 150, 251;   /* #a996fb  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-signal-edge: 107, 79, 224;    /* #6b4fe0  The outline of its finished paths and levels on the map */
-  --pal-world-signal-2:    82, 211, 187;    /* #52d3bb  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-signal-3:    217, 212, 245;   /* #d9d4f5  Third: theorem cards, and what the player derived */
-  --pal-world-signal-4:    231, 146, 210;   /* #e792d2  Fourth: tactic cards */
-
-  /* ── World colours, blossom (Induction World: pink on peach, with dark teal) ── */
-  --pal-world-blossom:      249, 163, 194;   /* #f9a3c2  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-blossom-edge: 207, 92, 138;    /* #cf5c8a  The outline of its finished paths and levels on the map */
-  --pal-world-blossom-2:    98, 188, 204;    /* #62bccc  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-blossom-3:    246, 200, 158;   /* #f6c89e  Third: theorem cards, and what the player derived */
-  --pal-world-blossom-4:    242, 139, 125;   /* #f28b7d  Fourth: tactic cards */
-
-  /* ── World colours, riverside (≠ World: bright leaves, a grey path, a brown river) ── */
-  --pal-world-riverside:      139, 220, 92;    /* #8bdc5c  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-riverside-edge: 79, 154, 42;     /* #4f9a2a  The outline of its finished paths and levels on the map */
-  --pal-world-riverside-2:    220, 181, 108;   /* #dcb56c  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-riverside-3:    168, 197, 216;   /* #a8c5d8  Third: theorem cards, and what the player derived */
-  --pal-world-riverside-4:    210, 156, 124;   /* #d29c7c  Fourth: tactic cards */
-
-  /* ── World colours, sandstone (Multiplication World: sunlit sandstone against the sky) ── */
-  --pal-world-sandstone:      242, 164, 76;    /* #f2a44c  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-sandstone-edge: 184, 109, 28;    /* #b86d1c  The outline of its finished paths and levels on the map */
-  --pal-world-sandstone-2:    125, 197, 239;   /* #7dc5ef  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-sandstone-3:    243, 219, 174;   /* #f3dbae  Third: theorem cards, and what the player derived */
-  --pal-world-sandstone-4:    220, 144, 114;   /* #dc9072  Fourth: tactic cards */
-
-  /* ── World colours, circuit (≤ World: deep blue and violet machinery with orange parts) ── */
-  --pal-world-circuit:      128, 144, 255;   /* #8090ff  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-circuit-edge: 69, 83, 217;     /* #4553d9  The outline of its finished paths and levels on the map */
-  --pal-world-circuit-2:    245, 156, 87;    /* #f59c57  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-circuit-3:    208, 201, 255;   /* #d0c9ff  Third: theorem cards, and what the player derived */
-  --pal-world-circuit-4:    200, 141, 246;   /* #c88df6  Fourth: tactic cards */
-
-  /* ── World colours, canyon (Advanced Multiplication World: a rust-brown bridge in a green canyon) ── */
-  --pal-world-canyon:      229, 138, 94;    /* #e58a5e  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-canyon-edge: 169, 83, 47;     /* #a9532f  The outline of its finished paths and levels on the map */
-  --pal-world-canyon-2:    169, 203, 124;   /* #a9cb7c  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-canyon-3:    201, 211, 221;   /* #c9d3dd  Third: theorem cards, and what the player derived */
-  --pal-world-canyon-4:    217, 181, 139;   /* #d9b58b  Fourth: tactic cards */
-}
-
-/* ══ The neutral palette: light scheme ══ */
-.app[data-visual-style='neutral'][data-visual-theme='light'] {
-  /* ── Page ── */
-  --pal-bg-start:      250, 250, 250;   /* #fafafa  The page behind everything, at the top left of its gradient; also the map's background */
-  --pal-bg-end:        232, 232, 232;   /* #e8e8e8  The page at the bottom right of its gradient */
-  --pal-surface:       255, 255, 255;   /* #ffffff  Panels and bars over the page: the header, the lower menu, the proof graph */
-  --pal-surface-solid: 255, 255, 255;   /* #ffffff  Opaque panels: menus, dialogs, tooltips */
-  --pal-card:          255, 255, 255;   /* #ffffff  The glass of cards and buttons */
-  --pal-line:          163, 163, 163;   /* #a3a3a3  Hairlines and faint fills: card borders, dividers, the tabs, formula backgrounds */
-  --pal-shadow:        23, 23, 23;      /* #171717  Shadows, and the dimming behind a panel */
-  --pal-backdrop:      10, 10, 10;      /* #0a0a0a  The dimmed page behind a text level's dialog */
-
-  /* ── Text ── */
-  --pal-text:           23, 23, 23;      /* #171717  Text */
-  --pal-text-bright:    38, 38, 38;      /* #262626  Formulas and other text that should stand out a little less than titles */
-  --pal-text-secondary: 82, 82, 82;      /* #525252  Secondary text: labels, icons, the lines of the proof graph */
-  --pal-text-muted:     115, 115, 115;   /* #737373  Muted text: page numbers, placeholders */
-  --pal-on-accent:      255, 255, 255;   /* #ffffff  Text on a button in the world's second colour */
-  --pal-on-solid:       255, 255, 255;   /* #ffffff  Text on a solid colour: a finished level on the map, the check mark once clicked */
-  --pal-inactive:       163, 163, 163;   /* #a3a3a3  What can't be used: a locked level's number, a card that won't take the drop */
-  --pal-track:          212, 212, 212;   /* #d4d4d4  Paths and levels of the map not reached yet; the dots of a pager */
-
-  /* ── What is waiting ── */
-  --pal-goal:           138, 138, 138;   /* #8a8a8a  An open goal's outline and glow, and Rewrite Mode's check mark before it is clicked */
-  --pal-goal-label:     115, 115, 115;   /* #737373  The word GOAL on an open goal, and the glow of a goal under the mouse */
-  --pal-stream-pending: 138, 138, 138;   /* #8a8a8a  An open branch in the proof graph */
-  --pal-hint:           115, 115, 115;   /* #737373  The border of a hint */
-  --pal-hint-ring:      163, 163, 163;   /* #a3a3a3  The thin ring around a hint on the canvas */
-  --pal-guide-arrow:    115, 115, 115;   /* #737373  The arrows that hints point with */
-
-  /* ── The same in every world ── */
-  --pal-warning:     202, 138, 4;   /* #ca8a04  Warnings, and the Undo button when it can undo */
-  --pal-danger:      220, 38, 38;   /* #dc2626  Errors and the Reset button: tints and borders */
-  --pal-danger-text: 220, 38, 38;   /* #dc2626  Error text */
+  /* ── Standard Black (the Visual Style setting: the same look on black) ── */
+  --pal-black-bg:            0, 0, 0;      /* #000000  Every page, header, lower menu and proof graph, on the map and in each world */
+  --pal-black-surface-solid: 14, 14, 14;   /* #0e0e0e  Opaque panels: menus, dialogs, tooltips */
 
   /* ── World colours, grey (worlds with no scheme of their own, and the map) ── */
-  --pal-world-grey:      82, 82, 82;      /* #525252  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-grey-edge: 38, 38, 38;      /* #262626  The outline of its finished paths and levels on the map */
-  --pal-world-grey-2:    64, 64, 64;      /* #404040  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-grey-3:    92, 92, 92;      /* #5c5c5c  Third: theorem cards, and what the player derived */
-  --pal-world-grey-4:    107, 107, 107;   /* #6b6b6b  Fourth: tactic cards */
+  --pal-world-grey:            244, 247, 249;   /* #f4f7f9  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
+  --pal-world-grey-edge:       159, 176, 187;   /* #9fb0bb  The outline of its finished paths and levels on the map */
+  --pal-world-grey-2:          211, 220, 226;   /* #d3dce2  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
+  --pal-world-grey-3:          183, 196, 204;   /* #b7c4cc  Third: theorem cards */
+  --pal-world-grey-4:          163, 177, 186;   /* #a3b1ba  Fourth: tactic cards */
+  --pal-world-grey-5:          209, 194, 155;   /* #d1c29b  Fifth: what the player assumed or derived in the level */
+  --pal-world-grey-incomplete: 234, 179, 8;     /* #eab308  What is still to do: an open goal, the check mark before it is clicked, an open branch */
 
   /* ── World colours, lantern (Rewriting World: red paper lanterns under a steel roof) ── */
-  --pal-world-lantern:      198, 42, 32;    /* #c62a20  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-lantern-edge: 143, 29, 22;    /* #8f1d16  The outline of its finished paths and levels on the map */
-  --pal-world-lantern-2:    163, 90, 0;     /* #a35a00  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-lantern-3:    47, 107, 128;   /* #2f6b80  Third: theorem cards, and what the player derived */
-  --pal-world-lantern-4:    138, 63, 112;   /* #8a3f70  Fourth: tactic cards */
+  --pal-world-lantern-bg:            62, 56, 55;      /* #3e3837  Its page, at the top left of the gradient */
+  --pal-world-lantern-bg-end:        41, 36, 35;      /* #292423  Its page, at the bottom right of the gradient */
+  --pal-world-lantern-surface:       30, 26, 26;      /* #1e1a1a  Its panels and bars: the header, the lower menu, the proof graph */
+  --pal-world-lantern-surface-solid: 49, 44, 43;      /* #312c2b  Its opaque panels: menus, dialogs, tooltips */
+  --pal-world-lantern:               255, 101, 90;    /* #ff655a  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
+  --pal-world-lantern-edge:          179, 36, 28;     /* #b3241c  The outline of its finished paths and levels on the map */
+  --pal-world-lantern-2:             95, 217, 210;    /* #5fd9d2  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
+  --pal-world-lantern-3:             174, 205, 242;   /* #aecdf2  Third: theorem cards */
+  --pal-world-lantern-4:             255, 159, 198;   /* #ff9fc6  Fourth: tactic cards */
+  --pal-world-lantern-5:             185, 162, 255;   /* #b9a2ff  Fifth: what the player assumed or derived in the level */
+  --pal-world-lantern-incomplete:    234, 179, 8;     /* #eab308  What is still to do: an open goal, the check mark before it is clicked, an open branch */
 
   /* ── World colours, aqueduct (Proposition World: blue-green water, rust, a few pink strands) ── */
-  --pal-world-aqueduct:      23, 112, 143;   /* #17708f  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-aqueduct-edge: 15, 79, 102;    /* #0f4f66  The outline of its finished paths and levels on the map */
-  --pal-world-aqueduct-2:    184, 42, 112;   /* #b82a70  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-aqueduct-3:    15, 118, 110;   /* #0f766e  Third: theorem cards, and what the player derived */
-  --pal-world-aqueduct-4:    153, 73, 42;    /* #99492a  Fourth: tactic cards */
+  --pal-world-aqueduct-bg:            53, 61, 70;      /* #353d46  Its page, at the top left of the gradient */
+  --pal-world-aqueduct-bg-end:        34, 41, 47;      /* #22292f  Its page, at the bottom right of the gradient */
+  --pal-world-aqueduct-surface:       26, 31, 35;      /* #1a1f23  Its panels and bars: the header, the lower menu, the proof graph */
+  --pal-world-aqueduct-surface-solid: 42, 48, 55;      /* #2a3037  Its opaque panels: menus, dialogs, tooltips */
+  --pal-world-aqueduct:               53, 224, 197;    /* #35e0c5  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
+  --pal-world-aqueduct-edge:          15, 156, 134;    /* #0f9c86  The outline of its finished paths and levels on the map */
+  --pal-world-aqueduct-2:             255, 138, 196;   /* #ff8ac4  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
+  --pal-world-aqueduct-3:             143, 211, 255;   /* #8fd3ff  Third: theorem cards */
+  --pal-world-aqueduct-4:             255, 160, 140;   /* #ffa08c  Fourth: tactic cards */
+  --pal-world-aqueduct-5:             201, 168, 255;   /* #c9a8ff  Fifth: what the player assumed or derived in the level */
+  --pal-world-aqueduct-incomplete:    234, 179, 8;     /* #eab308  What is still to do: an open goal, the check mark before it is clicked, an open branch */
 
   /* ── World colours, signal (Successor World: violet rings and white streaks over teal) ── */
-  --pal-world-signal:      91, 63, 214;    /* #5b3fd6  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-signal-edge: 63, 42, 158;    /* #3f2a9e  The outline of its finished paths and levels on the map */
-  --pal-world-signal-2:    11, 127, 110;   /* #0b7f6e  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-signal-3:    93, 88, 138;    /* #5d588a  Third: theorem cards, and what the player derived */
-  --pal-world-signal-4:    160, 52, 138;   /* #a0348a  Fourth: tactic cards */
+  --pal-world-signal-bg:            63, 64, 75;      /* #3f404b  Its page, at the top left of the gradient */
+  --pal-world-signal-bg-end:        44, 51, 53;      /* #2c3335  Its page, at the bottom right of the gradient */
+  --pal-world-signal-surface:       34, 40, 42;      /* #22282a  Its panels and bars: the header, the lower menu, the proof graph */
+  --pal-world-signal-surface-solid: 51, 52, 61;      /* #33343d  Its opaque panels: menus, dialogs, tooltips */
+  --pal-world-signal:               191, 166, 255;   /* #bfa6ff  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
+  --pal-world-signal-edge:          118, 80, 230;    /* #7650e6  The outline of its finished paths and levels on the map */
+  --pal-world-signal-2:             63, 227, 200;    /* #3fe3c8  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
+  --pal-world-signal-3:             230, 223, 255;   /* #e6dfff  Third: theorem cards */
+  --pal-world-signal-4:             250, 148, 227;   /* #fa94e3  Fourth: tactic cards */
+  --pal-world-signal-5:             166, 232, 106;   /* #a6e86a  Fifth: what the player assumed or derived in the level */
+  --pal-world-signal-incomplete:    234, 179, 8;     /* #eab308  What is still to do: an open goal, the check mark before it is clicked, an open branch */
 
   /* ── World colours, blossom (Induction World: pink on peach, with dark teal) ── */
-  --pal-world-blossom:      194, 48, 107;   /* #c2306b  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-blossom-edge: 143, 31, 77;    /* #8f1f4d  The outline of its finished paths and levels on the map */
-  --pal-world-blossom-2:    29, 111, 128;   /* #1d6f80  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-blossom-3:    168, 90, 31;    /* #a85a1f  Third: theorem cards, and what the player derived */
-  --pal-world-blossom-4:    184, 58, 46;    /* #b83a2e  Fourth: tactic cards */
+  --pal-world-blossom-bg:            74, 63, 67;      /* #4a3f43  Its page, at the top left of the gradient */
+  --pal-world-blossom-bg-end:        53, 44, 47;      /* #352c2f  Its page, at the bottom right of the gradient */
+  --pal-world-blossom-surface:       42, 34, 37;      /* #2a2225  Its panels and bars: the header, the lower menu, the proof graph */
+  --pal-world-blossom-surface-solid: 61, 52, 55;      /* #3d3437  Its opaque panels: menus, dialogs, tooltips */
+  --pal-world-blossom:               255, 155, 200;   /* #ff9bc8  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
+  --pal-world-blossom-edge:          209, 75, 140;    /* #d14b8c  The outline of its finished paths and levels on the map */
+  --pal-world-blossom-2:             79, 217, 230;    /* #4fd9e6  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
+  --pal-world-blossom-3:             203, 188, 255;   /* #cbbcff  Third: theorem cards */
+  --pal-world-blossom-4:             255, 196, 163;   /* #ffc4a3  Fourth: tactic cards */
+  --pal-world-blossom-5:             143, 227, 143;   /* #8fe38f  Fifth: what the player assumed or derived in the level */
+  --pal-world-blossom-incomplete:    234, 179, 8;     /* #eab308  What is still to do: an open goal, the check mark before it is clicked, an open branch */
 
   /* ── World colours, riverside (≠ World: bright leaves, a grey path, a brown river) ── */
-  --pal-world-riverside:      57, 128, 31;    /* #39801f  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-riverside-edge: 37, 90, 18;     /* #255a12  The outline of its finished paths and levels on the map */
-  --pal-world-riverside-2:    138, 100, 20;   /* #8a6414  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-riverside-3:    63, 98, 121;    /* #3f6279  Third: theorem cards, and what the player derived */
-  --pal-world-riverside-4:    139, 90, 60;    /* #8b5a3c  Fourth: tactic cards */
+  --pal-world-riverside-bg:            57, 64, 53;      /* #394035  Its page, at the top left of the gradient */
+  --pal-world-riverside-bg-end:        37, 42, 34;      /* #252a22  Its page, at the bottom right of the gradient */
+  --pal-world-riverside-surface:       27, 31, 25;      /* #1b1f19  Its panels and bars: the header, the lower menu, the proof graph */
+  --pal-world-riverside-surface-solid: 45, 50, 42;      /* #2d322a  Its opaque panels: menus, dialogs, tooltips */
+  --pal-world-riverside:               134, 238, 85;    /* #86ee55  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
+  --pal-world-riverside-edge:          74, 166, 38;     /* #4aa626  The outline of its finished paths and levels on the map */
+  --pal-world-riverside-2:             125, 203, 255;   /* #7dcbff  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
+  --pal-world-riverside-3:             213, 220, 234;   /* #d5dcea  Third: theorem cards */
+  --pal-world-riverside-4:             244, 184, 164;   /* #f4b8a4  Fourth: tactic cards */
+  --pal-world-riverside-5:             199, 155, 255;   /* #c79bff  Fifth: what the player assumed or derived in the level */
+  --pal-world-riverside-incomplete:    234, 179, 8;     /* #eab308  What is still to do: an open goal, the check mark before it is clicked, an open branch */
 
   /* ── World colours, sandstone (Multiplication World: sunlit sandstone against the sky) ── */
-  --pal-world-sandstone:      168, 89, 12;    /* #a8590c  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-sandstone-edge: 120, 64, 6;     /* #784006  The outline of its finished paths and levels on the map */
-  --pal-world-sandstone-2:    31, 111, 165;   /* #1f6fa5  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-sandstone-3:    128, 98, 37;    /* #806225  Third: theorem cards, and what the player derived */
-  --pal-world-sandstone-4:    150, 71, 42;    /* #96472a  Fourth: tactic cards */
+  --pal-world-sandstone-bg:            73, 66, 60;      /* #49423c  Its page, at the top left of the gradient */
+  --pal-world-sandstone-bg-end:        51, 46, 40;      /* #332e28  Its page, at the bottom right of the gradient */
+  --pal-world-sandstone-surface:       40, 35, 31;      /* #28231f  Its panels and bars: the header, the lower menu, the proof graph */
+  --pal-world-sandstone-surface-solid: 59, 53, 48;      /* #3b3530  Its opaque panels: menus, dialogs, tooltips */
+  --pal-world-sandstone:               111, 205, 255;   /* #6fcdff  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
+  --pal-world-sandstone-edge:          27, 134, 201;    /* #1b86c9  The outline of its finished paths and levels on the map */
+  --pal-world-sandstone-2:             255, 225, 173;   /* #ffe1ad  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
+  --pal-world-sandstone-3:             105, 227, 210;   /* #69e3d2  Third: theorem cards */
+  --pal-world-sandstone-4:             255, 169, 186;   /* #ffa9ba  Fourth: tactic cards */
+  --pal-world-sandstone-5:             182, 227, 107;   /* #b6e36b  Fifth: what the player assumed or derived in the level */
+  --pal-world-sandstone-incomplete:    234, 179, 8;     /* #eab308  What is still to do: an open goal, the check mark before it is clicked, an open branch */
 
   /* ── World colours, circuit (≤ World: deep blue and violet machinery with orange parts) ── */
-  --pal-world-circuit:      51, 64, 214;    /* #3340d6  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-circuit-edge: 35, 44, 153;    /* #232c99  The outline of its finished paths and levels on the map */
-  --pal-world-circuit-2:    176, 80, 13;    /* #b0500d  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-circuit-3:    90, 79, 176;    /* #5a4fb0  Third: theorem cards, and what the player derived */
-  --pal-world-circuit-4:    124, 47, 192;   /* #7c2fc0  Fourth: tactic cards */
+  --pal-world-circuit-bg:            51, 48, 64;      /* #333040  Its page, at the top left of the gradient */
+  --pal-world-circuit-bg-end:        33, 30, 41;      /* #211e29  Its page, at the bottom right of the gradient */
+  --pal-world-circuit-surface:       23, 21, 30;      /* #17151e  Its panels and bars: the header, the lower menu, the proof graph */
+  --pal-world-circuit-surface-solid: 39, 37, 49;      /* #272531  Its opaque panels: menus, dialogs, tooltips */
+  --pal-world-circuit:               138, 164, 255;   /* #8aa4ff  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
+  --pal-world-circuit-edge:          63, 85, 224;     /* #3f55e0  The outline of its finished paths and levels on the map */
+  --pal-world-circuit-2:             79, 230, 255;    /* #4fe6ff  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
+  --pal-world-circuit-3:             213, 204, 255;   /* #d5ccff  Third: theorem cards */
+  --pal-world-circuit-4:             234, 128, 255;   /* #ea80ff  Fourth: tactic cards */
+  --pal-world-circuit-5:             127, 230, 161;   /* #7fe6a1  Fifth: what the player assumed or derived in the level */
+  --pal-world-circuit-incomplete:    234, 179, 8;     /* #eab308  What is still to do: an open goal, the check mark before it is clicked, an open branch */
 
   /* ── World colours, canyon (Advanced Multiplication World: a rust-brown bridge in a green canyon) ── */
-  --pal-world-canyon:      168, 72, 42;    /* #a8482a  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
-  --pal-world-canyon-edge: 117, 48, 27;    /* #75301b  The outline of its finished paths and levels on the map */
-  --pal-world-canyon-2:    79, 112, 38;    /* #4f7026  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
-  --pal-world-canyon-3:    86, 101, 115;   /* #566573  Third: theorem cards, and what the player derived */
-  --pal-world-canyon-4:    128, 89, 42;    /* #80592a  Fourth: tactic cards */
+  --pal-world-canyon-bg:            63, 65, 57;      /* #3f4139  Its page, at the top left of the gradient */
+  --pal-world-canyon-bg-end:        43, 44, 37;      /* #2b2c25  Its page, at the bottom right of the gradient */
+  --pal-world-canyon-surface:       32, 33, 28;      /* #20211c  Its panels and bars: the header, the lower menu, the proof graph */
+  --pal-world-canyon-surface-solid: 50, 52, 45;      /* #32342d  Its opaque panels: menus, dialogs, tooltips */
+  --pal-world-canyon:               255, 138, 99;    /* #ff8a63  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
+  --pal-world-canyon-edge:          192, 74, 38;     /* #c04a26  The outline of its finished paths and levels on the map */
+  --pal-world-canyon-2:             185, 232, 106;   /* #b9e86a  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
+  --pal-world-canyon-3:             207, 224, 238;   /* #cfe0ee  Third: theorem cards */
+  --pal-world-canyon-4:             231, 198, 160;   /* #e7c6a0  Fourth: tactic cards */
+  --pal-world-canyon-5:             95, 220, 200;    /* #5fdcc8  Fifth: what the player assumed or derived in the level */
+  --pal-world-canyon-incomplete:    234, 179, 8;     /* #eab308  What is still to do: an open goal, the check mark before it is clicked, an open branch */
+
+  /* ── World colours, frost (Logic World: snow over grey-blue steelwork, white lamps) ── */
+  --pal-world-frost-bg:            62, 68, 76;      /* #3e444c  Its page, at the top left of the gradient */
+  --pal-world-frost-bg-end:        43, 48, 54;      /* #2b3036  Its page, at the bottom right of the gradient */
+  --pal-world-frost-surface:       34, 38, 43;      /* #22262b  Its panels and bars: the header, the lower menu, the proof graph */
+  --pal-world-frost-surface-solid: 50, 56, 62;      /* #32383e  Its opaque panels: menus, dialogs, tooltips */
+  --pal-world-frost:               169, 220, 255;   /* #a9dcff  First: what lights up when a goal, a branch or a level is finished; its paths on the map */
+  --pal-world-frost-edge:          61, 140, 201;    /* #3d8cc9  The outline of its finished paths and levels on the map */
+  --pal-world-frost-2:             196, 181, 255;   /* #c4b5ff  Second: what the player acts with (drop targets, the current branch, active tabs, names) */
+  --pal-world-frost-3:             216, 230, 242;   /* #d8e6f2  Third: theorem cards */
+  --pal-world-frost-4:             143, 227, 208;   /* #8fe3d0  Fourth: tactic cards */
+  --pal-world-frost-5:             255, 181, 168;   /* #ffb5a8  Fifth: what the player assumed or derived in the level */
+  --pal-world-frost-incomplete:    234, 179, 8;     /* #eab308  What is still to do: an open goal, the check mark before it is clicked, an open branch */
 }

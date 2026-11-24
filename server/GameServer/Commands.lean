@@ -236,7 +236,10 @@ elab "VisualStartTab" tab:str : command => do
 /-- Limit how often a tactic of Visual Lean's tray can be used along one branch of a
 proof: its card shows the uses left, as `x1`, and once they are spent on a branch it is
 greyed out there and in the branches that come from it. In a level file it applies to
-that level; in a world file, to every level of the world.
+that level; in a world file, to every level of the world; in the game file (before
+`MakeGame`), to every level of the game. The nearest one wins, so
+`VisualTacticUses induction 0` in the game file leaves the tactic to the levels and
+worlds that give it a count of their own.
 Example: `VisualTacticUses induction 1` -/
 elab "VisualTacticUses" tactic:ident uses:num : command => do
   let limit : VisualTacticUses := { tactic := tactic.getId.toString, uses := uses.getNat }
@@ -245,7 +248,7 @@ elab "VisualTacticUses" tactic:ident uses:num : command => do
   match ← getCurLayer with
   | .Level => modifyCurLevel fun lvl => pure { lvl with visualTacticUses := add lvl.visualTacticUses }
   | .World => modifyCurWorld fun world => pure { world with visualTacticUses := add world.visualTacticUses }
-  | .Game => throwError "VisualTacticUses belongs in a world or level file"
+  | .Game => modifyCurGame fun game => pure { game with visualTacticUses := add game.visualTacticUses }
 
 /-- Refuse Rewrite Mode on this level's goal: opening it shows a warning instead, so the
 player proves the equality like any other proposition. Rewrite Mode on a hypothesis
@@ -283,17 +286,40 @@ elab "VisualPersistentHints" : command => do
   modifyCurGame fun game => pure { game with visualPersistentHints := true }
 
 /-- In Rewrite Mode on a goal, show the check mark once both sides match in every level,
-not only in `VisualRewriteOnly` ones. Clicking it closes the goal; if that finishes the
-level, the player stays in Rewrite Mode and can go Back to see the finished proof. Use it
-in the game file, before `MakeGame`. -/
+not only in `VisualRewriteOnly` ones. Clicking it closes the goal and takes the player
+back to Proposition Mode (a `VisualRewriteOnly` level has none, and stays). Use it in the
+game file, before `MakeGame`. -/
 elab "VisualRewriteCheck" : command => do
   modifyCurGame fun game => pure { game with visualRewriteCheck := true }
+
+/-- Name the number that a click takes out of a hypothesis like `a ≤ b`, whose `∃` is
+behind a definition, `c1`, `c2`, … after the definition's bound variable, never plain
+`c`. (A hypothesis that shows its `∃ c, …` still gives `c` first.) Visual Lean's
+`click_prop` looks for the declaration this makes, so put the command in a file that
+every level imports, such as `Game/Metadata.lean`, not in the game file. -/
+macro "VisualNumberedWitnesses" : command =>
+  `(command| def $(Lean.mkIdent `_root_.GameServer.visualNumberedWitnesses) : Unit := ())
+
+/-- Name the number that `cases` or `induction` on a variable `a` brings in after it:
+`a1`, so that the successor case reads `S(a1)`, and `a2` when `a1` is split in turn (or
+when `a1` is taken). The inductive hypothesis is `ha1`. Without it the names are `d` and
+`hd`. Use it in the game file, before `MakeGame`. -/
+elab "VisualNumberedSplits" : command => do
+  modifyCurGame fun game => pure { game with visualNumberedSplits := true }
 
 /-- The name of the game's successor function, for the term builder of Visual Lean's
 specialization view, when it isn't `succ`. Use it in the game file, before `MakeGame`.
 Example: `VisualSuccessorName S` -/
 elab "VisualSuccessorName" name:ident : command => do
   modifyCurGame fun game => pure { game with visualSuccessorName? := some name.getId.toString }
+
+/-- How the game defines `a ≤ b`: the equation under its `∃ c`, written with `a`, `b` and
+`c`. Visual Lean shows the definition under a card that reads `a ≤ b`; Lean supplies it
+for the cards of a proof, and this is for the ones Visual Lean writes out itself, such as
+theorem cards. Without it the equation is NNG4's, `b = a + c`. Use it in the game file,
+before `MakeGame`. Example: `VisualLeDefinition "a + c = b"` -/
+elab "VisualLeDefinition" equation:str : command => do
+  modifyCurGame fun game => pure { game with visualLeDefinition? := some equation.getString }
 
 /-- Don't let a click on a goal `a = a` close it in Visual Lean. The player opens the goal
 in Rewrite Mode instead and uses the check mark there, so pair this with
@@ -310,11 +336,11 @@ elab "VisualAxioms" names:ident* : command => do
     visualAxioms := names.foldl (fun axioms name =>
       if axioms.contains name.getId then axioms else axioms.push name.getId) game.visualAxioms }
 
-/-- Give the game Visual Lean's neutral look: greys for the page, panels, tabs and
-cards, and the few colours of the world being played (`VisualWorldColor`) for everything
-else. An open goal and Rewrite Mode's check mark are grey, and what a finished goal,
-branch or level lights up in is the world's first colour. Use it in the game file, before
-`MakeGame`. -/
+/-- Give the game Visual Lean's neutral look. It has one scheme, with no light mode: the
+map is a slate, and inside a world the page, its panels and everything coloured are the
+world's own (`VisualWorldColor`). An open goal and Rewrite Mode's check mark are the
+world's colour for what is still to do, and what a finished goal, branch or level lights
+up in is the world's first colour. Use it in the game file, before `MakeGame`. -/
 elab "VisualNeutralPalette" : command => do
   modifyCurGame fun game => pure { game with visualNeutralPalette := true }
 
@@ -343,16 +369,18 @@ elab "VisualBonusOf" source:ident level:num : command => do
 /-- Path map: colour of the current world's path, one of `purple`, `blue`, `sky`,
 `teal`, `green`, `amber`, `orange`, `red`, `pink`, `indigo`, `lime` and `grey`, or one of
 the schemes `lantern`, `aqueduct`, `signal`, `blossom`, `riverside`, `sandstone`,
-`circuit` and `canyon`. Worlds without one get a colour in map order. The schemes are
-for a game with `VisualNeutralPalette`: there a scheme is also the four colours of the
-world's levels, a world with a plain colour is played in greys, and a world without a
-colour is grey on the map too.
+`circuit`, `canyon` and `frost`. Worlds without one get a colour in map order. The schemes are
+for a game with `VisualNeutralPalette`: there a scheme is also the page and the colours of
+the world's levels, and a world with a plain colour or none is grey, on the map and in its
+levels. The player's Visual Style "High Contrast" draws such a game in the classic dark
+colours instead, where a world with a plain colour has it and a scheme stands for a plain
+colour (`lantern` for `amber`, and so on).
 Use it in the world file. Example: `VisualWorldColor amber` -/
 elab "VisualWorldColor" color:ident : command => do
   let name := color.getId.toString
   let known := ["purple", "blue", "sky", "teal", "green", "amber", "orange", "red", "pink",
     "indigo", "lime", "grey", "lantern", "aqueduct", "signal", "blossom", "riverside",
-    "sandstone", "circuit", "canyon"]
+    "sandstone", "circuit", "canyon", "frost"]
   unless known.contains name do
     throwErrorAt color m!"Unknown colour `{name}`; expected one of {known}"
   modifyCurWorld fun world => pure { world with visualColor? := some name }
@@ -490,6 +518,21 @@ elab "VisualGoalInfoOnGoal " pos:ident arrow:visualBool goalText:str &"while" te
     | _ => false
   let info := { mkVisualGoalInfo position arrowBool (some (goalText.getString)) text.getString with
     onlyWhile := true }
+  modifyCurLevel fun lvl => pure { lvl with visualGoalInfos := lvl.visualGoalInfos.push info }
+
+/-- Add Visual Lean-only instructional text near the goal card for every proof state that
+none of the level's other goal hints is written for: the place for "that won't work, undo"
+when the states that do work each have a hint (one with empty text will do). Example:
+`VisualGoalInfoOtherwise above false "We won't be able to solve the goal with that witness."` -/
+elab "VisualGoalInfoOtherwise " pos:ident arrow:visualBool text:str : command => do
+  let position := pos.getId.toString
+  unless position == "above" || position == "below" do
+    throwErrorAt pos "VisualGoalInfoOtherwise position must be `above` or `below`"
+  let arrowBool :=
+    match arrow with
+    | `(visualBool| true) => true
+    | _ => false
+  let info := { mkVisualGoalInfo position arrowBool none text.getString with otherwise := true }
   modifyCurLevel fun lvl => pure { lvl with visualGoalInfos := lvl.visualGoalInfos.push info }
 
 /-- Add Visual Lean-only instructional text near the goal card, only while the current

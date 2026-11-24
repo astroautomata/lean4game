@@ -23,6 +23,8 @@ interface EqualityHypCardProps {
   isReverse: boolean
   isFailing?: boolean
   emphasized?: boolean
+  /** A card of another page, in the document only so that it can be measured. */
+  offPage?: boolean
   onClick?: () => void
   onMouseEnter?: () => void
   onMouseLeave?: () => void
@@ -51,6 +53,7 @@ export function EqualityHypCard({
   isReverse,
   isFailing = false,
   emphasized = false,
+  offPage = false,
   onClick,
   onMouseEnter,
   onMouseLeave,
@@ -76,12 +79,14 @@ export function EqualityHypCard({
       data-rule-kind={source}
       data-rule-source={isReverse ? rhsStr : lhsStr}
       data-rule-target={isReverse ? lhsStr : rhsStr}
+      data-rule-off-page={offPage ? 'true' : undefined}
+      aria-hidden={offPage || undefined}
       {...listeners}
       {...attributes}
       onClick={onClick}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className={`tr-rule-card tr-eq-card${source === 'hyp' ? ' tr-hyp-rule-card' : source === 'derived' ? ' tr-derived-rule-card' : ''}${axiom ? ' tr-axiom-card' : ''}${forallFooter ? ' has-forall-footer' : ''}${isDragging ? ' dragging' : ''}${isFailing ? ' drag-fail' : ''}${emphasized ? ' visual-emphasize' : ''}`}
+      className={`tr-rule-card tr-eq-card${source === 'hyp' ? ' tr-hyp-rule-card' : source === 'derived' ? ' tr-derived-rule-card' : ''}${axiom ? ' tr-axiom-card' : ''}${forallFooter ? ' has-forall-footer' : ''}${isDragging ? ' dragging' : ''}${isFailing ? ' drag-fail' : ''}${emphasized ? ' visual-emphasize' : ''}${offPage ? ' tr-rule-card-off-page' : ''}`}
     >
       <h3>{renderFormulaText(label)}</h3>
       <div className="tr-symbol">

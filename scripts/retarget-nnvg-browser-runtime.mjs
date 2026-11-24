@@ -67,7 +67,9 @@ fs.writeFileSync(lakefile, lakeAfter)
 // (as NNG4's induction macro showed), so the build-only copy of each proof
 // gets the exact core syntax the macro expands to. Players' own `induction` and
 // `cases` commands still go through the macros, imported by the runtime facade.
-const tacticModules = ['NNVG.MyNat.Induction', 'NNVG.Tactic.BrowserCasesCore', 'NNVG.Tactic.Cases', 'NNVG.Tactic.Xyzzy']
+// (The game had an `xyzzy` tactic for its Fermat level until 2026-11-24.)
+const tacticModules = ['NNVG.MyNat.Induction', 'NNVG.Tactic.BrowserCasesCore', 'NNVG.Tactic.Cases',
+  ...(fs.existsSync(path.join(newTree, 'Tactic', 'Xyzzy.lean')) ? ['NNVG.Tactic.Xyzzy'] : [])]
 
 // Lean's own `cases` elaborator needs private induction-elaborator bodies that
 // the browser compiler leaves out: in lean.wasm a `cases` corrupts the heap

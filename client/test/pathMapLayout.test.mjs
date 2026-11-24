@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-const { computePathMapLayout, roundedPathData, PATH_MAP_COLUMN_WIDTH, PATH_MAP_CORNER_RADIUS, PATH_MAP_ROW_HEIGHT } =
+const { computePathMapLayout, pathMapLabelLines, roundedPathData, PATH_MAP_COLUMN_WIDTH, PATH_MAP_CORNER_RADIUS, PATH_MAP_ROW_HEIGHT } =
   await import('../../tmp-path-map-tests/visual/pathMapLayout.js')
 
 // An earlier map of the Natural Numbers Video Game: a welcome text level, then Rewrite
@@ -701,4 +701,241 @@ test('a level with branches of its own waits for the branches above it', () => {
   assert.equal(rowOf('Main', 2), 2)
   assert.equal(rowOf('Third', 1), 3)
   assert.deepEqual([rowOf('Main', 3), rowOf('Main', 4)], [3, 4])
+})
+
+// The map since the 2026-11-23 spec pull (V11): Induction World carries on past the ≠
+// World's boss (levels 4 to 7, then 8 and 9), ≤ World waits for it twice, Logic World
+// follows two bonus branches and the ≠ World, and The End follows Logic World. The
+// game lists no edge from Induction World's first part to its second: the way round by
+// the ≠ World implies it.
+const nnvg8 = {
+  worlds: {
+    AdvMultiplication: { title: 'Advanced Multiplication World', color: 'canyon', column: 1 },
+    Induction: { title: 'Induction World', color: 'blossom', column: -1 },
+    InductionDouble: { title: 'Induction World', column: -1, continues: 'InductionJoined' },
+    InductionJoined: { title: 'Induction World', column: -1, continues: 'Induction' },
+    Intro: { title: 'Welcome', column: 0, shared: true },
+    LessOrEqual: { title: '≤ World', color: 'circuit', column: 1 },
+    LessOrEqualBoss: { title: '≤ World', column: 1, continues: 'LessOrEqualJoined' },
+    LessOrEqualJoined: { title: '≤ World', column: 1, continues: 'LessOrEqual' },
+    Logic: { title: 'Logic World', color: 'frost', column: 2 },
+    Multiplication: { title: 'Multiplication World', color: 'sandstone', column: -2 },
+    Neq: { title: '≠ World', color: 'riverside', column: 1 },
+    NeqJoined: { title: '≠ World', column: 1, continues: 'Neq' },
+    Outro: { title: 'The End', column: 0, shared: true, bottom: true },
+    Power: { title: 'Power World', color: 'red', column: -2 },
+    PowerBonus: { title: 'Power World Bonus', bonusOf: { world: 'Power', level: 9 } },
+    Proposition: { title: 'Proposition World', color: 'aqueduct', column: 1 },
+    PropositionBonus: { title: 'Proposition World Bonus', bonusOf: { world: 'PropositionRight', level: 2 } },
+    PropositionBonusB: { title: 'Proposition World Bonus', bonusOf: { world: 'PropositionRight', level: 8 } },
+    PropositionBonusC: { title: 'Proposition World Bonus', bonusOf: { world: 'PropositionRight', level: 8 } },
+    PropositionRight: { title: 'Proposition World', column: 2, continues: 'Proposition' },
+    Rewrite: { title: 'Rewrite World', color: 'lantern', column: -1 },
+    RewriteBonus: { title: 'Rewrite World Bonus', bonusOf: { world: 'Rewrite', level: 3 } },
+    RewriteBonusB: { title: 'Rewrite World Bonus', bonusOf: { world: 'Rewrite', level: 3 } },
+    Successor: { title: 'Successor World', color: 'signal', column: 0 },
+    SuccessorJoined: { title: 'Successor World', column: 0, continues: 'Successor' },
+  },
+  edges: [
+    ['AdvMultiplication', 'Outro'],
+    ['Induction', 'Multiplication'],
+    ['Induction', 'NeqJoined'],
+    ['InductionDouble', 'LessOrEqualBoss'],
+    ['InductionJoined', 'InductionDouble'],
+    ['InductionJoined', 'LessOrEqualJoined'],
+    ['Intro', 'Proposition'],
+    ['Intro', 'Rewrite'],
+    ['LessOrEqual', 'LessOrEqualJoined'],
+    ['LessOrEqualBoss', 'AdvMultiplication'],
+    ['LessOrEqualJoined', 'LessOrEqualBoss'],
+    ['Logic', 'Outro'],
+    ['Multiplication', 'AdvMultiplication'],
+    ['Multiplication', 'Power'],
+    ['Neq', 'NeqJoined'],
+    ['NeqJoined', 'InductionJoined'],
+    ['NeqJoined', 'LessOrEqual'],
+    ['NeqJoined', 'Logic'],
+    ['Power', 'Outro'],
+    ['Power', 'PowerBonus'],
+    ['Proposition', 'PropositionRight'],
+    ['Proposition', 'SuccessorJoined'],
+    ['PropositionBonusB', 'Logic'],
+    ['PropositionBonusC', 'Logic'],
+    ['PropositionRight', 'Neq'],
+    ['PropositionRight', 'PropositionBonus'],
+    ['PropositionRight', 'PropositionBonusB'],
+    ['PropositionRight', 'PropositionBonusC'],
+    ['Rewrite', 'RewriteBonus'],
+    ['Rewrite', 'RewriteBonusB'],
+    ['Rewrite', 'Successor'],
+    ['Successor', 'SuccessorJoined'],
+    ['SuccessorJoined', 'Induction'],
+    ['SuccessorJoined', 'Neq'],
+  ],
+  worldSize: { AdvMultiplication: 10, Induction: 4, InductionDouble: 2, InductionJoined: 4, Intro: 1, LessOrEqual: 7, LessOrEqualBoss: 1, LessOrEqualJoined: 3, Logic: 1, Multiplication: 9, Neq: 9, NeqJoined: 1, Outro: 1, Power: 9, PowerBonus: 1, Proposition: 8, PropositionBonus: 1, PropositionBonusB: 1, PropositionBonusC: 3, PropositionRight: 8, Rewrite: 6, RewriteBonus: 2, RewriteBonusB: 1, Successor: 3, SuccessorJoined: 3 },
+}
+
+test('a world carries on the path it continues, also where no edge of the game says so', () => {
+  const layout = computePathMapLayout(nnvg8, { defaultColor: 'grey' })
+  assertNoPathOverLevels(layout)
+  assert.equal(nnvg8.edges.some(([source, target]) => source === 'Induction' && target === 'InductionJoined'), false)
+  const [last, next] = [node(layout, 'Induction', 4), node(layout, 'InductionJoined', 1)]
+  assert.equal(next.x, last.x)
+  assert.deepEqual(segment(layout, 'edge:Induction:InductionJoined:out').points[0], { x: last.x, y: last.y })
+  assert.deepEqual(segment(layout, 'edge:Induction:InductionJoined:in').points.at(-1), { x: next.x, y: next.y })
+  // The ≠ World's boss comes before it, and its path joins from the side above it.
+  const boss = node(layout, 'NeqJoined', 1)
+  assert.ok(boss.y < next.y)
+  const join = segment(layout, 'edge:NeqJoined:InductionJoined:in')
+  assert.equal(join.points.at(-2).x, next.x)
+  assert.ok(join.points.at(-2).y < next.y - 22)
+  // All of Induction World is one colour and has one title.
+  for (const world of ['InductionJoined', 'InductionDouble']) assert.equal(node(layout, world, 1).color, 'blossom')
+  assert.deepEqual(layout.labels.filter(label => label.text === 'Induction World').map(label => label.world), ['Induction'])
+})
+
+test('branches off one level that lead on are listed longest first, so their paths drop clear', () => {
+  const layout = computePathMapLayout(nnvg8, { defaultColor: 'grey' })
+  const [b, c] = [node(layout, 'PropositionBonusB', 1), node(layout, 'PropositionBonusC', 1)]
+  assert.ok(c.y < b.y, 'the three levels of C are above the one of B')
+  for (const [source, last] of [['PropositionBonusB', 1], ['PropositionBonusC', 3]]) {
+    const from = node(layout, source, last)
+    const onward = [...segment(layout, `edge:${source}:Logic:out`).points, ...segment(layout, `edge:${source}:Logic:in`).points]
+    assert.deepEqual(onward[0], { x: from.x, y: from.y })
+    assert.deepEqual(onward.at(-1), { x: node(layout, 'Logic', 1).x, y: node(layout, 'Logic', 1).y })
+    // Straight down from its last level, past no other level.
+    assert.equal(onward[1].x, from.x)
+    assert.equal(layout.nodes.some(n => n.x === from.x && n.y > from.y && n.y < onward.at(-2).y), false)
+  }
+  // Branches that lead nowhere keep the order they are listed in.
+  assert.ok(node(layout, 'RewriteBonus', 1).y < node(layout, 'RewriteBonusB', 1).y)
+})
+
+test('a path that needs a lane keeps off the runs of other paths, leaving a little lower if it must', () => {
+  const layout = computePathMapLayout(nnvg8, { defaultColor: 'grey' })
+  const uprights = key => {
+    const points = [...segment(layout, `${key}:out`).points, ...segment(layout, `${key}:in`).points]
+    return points.flatMap((point, index) => {
+      const next = points[index + 1]
+      return next && next.x === point.x && next.y !== point.y
+        ? [{ x: point.x, from: Math.min(point.y, next.y), to: Math.max(point.y, next.y) }] : []
+    })
+  }
+  const edges = [...new Set(layout.segments.filter(s => s.key.startsWith('edge:')).map(s => s.key.replace(/:(out|in)(:bridge.*)?$/u, '')))]
+  // Paths out of different worlds never run down the same stretch of a column.
+  // (Those out of one world do, until they fork.)
+  for (const a of edges) {
+    for (const b of edges) {
+      if (a >= b || a.split(':')[1] === b.split(':')[1]) continue
+      for (const first of uprights(a)) {
+        for (const second of uprights(b)) {
+          const shared = Math.min(first.to, second.to) - Math.max(first.from, second.from)
+          // Two paths into one level share the last stretch above it.
+          const joinsOneLevel = a.split(':')[2] === b.split(':')[2]
+          assert.ok(first.x !== second.x || shared <= (joinsOneLevel ? PATH_MAP_ROW_HEIGHT : 0), `${a} runs along ${b}`)
+        }
+      }
+    }
+  }
+  // Multiplication World's path to Advanced Multiplication World can't go down its own
+  // column (Power World) or Induction World's (the path from its last level), so it
+  // takes the middle one, below the turn of the path into ≤ World's level 7.
+  const across = segment(layout, 'edge:Multiplication:AdvMultiplication:in')
+  assert.ok(across.points.some(point => point.x === 0))
+  const turn = segment(layout, 'edge:InductionJoined:LessOrEqualJoined:in').points.at(-3)
+  assert.equal(turn.x, 0)
+  assert.ok(across.points[2].y > turn.y + PATH_MAP_CORNER_RADIUS)
+  assert.equal(layout.segments.filter(s => s.bridge).length, 2)
+})
+
+test('The End follows Power World, Advanced Multiplication World and Logic World', () => {
+  const layout = computePathMapLayout(nnvg8, { defaultColor: 'grey' })
+  const end = node(layout, 'Outro', 1)
+  for (const n of layout.nodes) {
+    if (n.world !== 'Outro') assert.ok(end.y - n.y >= 2 * PATH_MAP_ROW_HEIGHT, `${n.world} ${n.level} is not above The End`)
+  }
+  for (const source of ['Power', 'AdvMultiplication', 'Logic']) {
+    const into = segment(layout, `edge:${source}:Outro:in`)
+    assert.ok(into, `no path from ${source}`)
+    assert.deepEqual(into.points.at(-1), { x: end.x, y: end.y })
+    assert.equal(into.color, 'grey')
+  }
+  // ≤ World is three Lean worlds, joined twice by Induction World, in one column.
+  const column = node(layout, 'LessOrEqual', 1).x
+  for (const [world, level] of [['LessOrEqualJoined', 1], ['LessOrEqualBoss', 1], ['AdvMultiplication', 1]]) {
+    assert.equal(node(layout, world, level).x, column)
+  }
+  assert.ok(node(layout, 'LessOrEqualJoined', 1).y > node(layout, 'InductionJoined', 4).y)
+  assert.ok(node(layout, 'LessOrEqualBoss', 1).y > node(layout, 'InductionDouble', 2).y)
+})
+
+// The map since the 2026-11-24 spec pull (V12): Multiplication World and Power World are
+// one world, Multiplication and Exponentiation World, whose second part carries on the
+// first; ≤ World waits for Induction World a level earlier; and the bonus off the last
+// level of the powers also waits for ≤ World, whose path comes across the whole map.
+const nnvg9 = {
+  worlds: {
+    ...nnvg8.worlds,
+    Multiplication: { title: 'Multiplication and Exponentiation World', color: 'sandstone', column: -2 },
+    Power: { title: 'Multiplication and Exponentiation World', column: -2, continues: 'Multiplication' },
+    PowerBonus: { title: 'Multiplication and Exponentiation World Bonus', bonusOf: { world: 'Power', level: 9 } },
+  },
+  edges: [...nnvg8.edges, ['LessOrEqualBoss', 'PowerBonus']],
+  worldSize: { ...nnvg8.worldSize, Multiplication: 8, LessOrEqual: 6, LessOrEqualJoined: 4 },
+}
+
+test('a long title is set on two lines of about the same length', () => {
+  assert.deepEqual(pathMapLabelLines('≤ World'), ['≤ World'])
+  assert.deepEqual(pathMapLabelLines('Advanced Multiplication World'), ['Advanced Multiplication World'])
+  assert.deepEqual(pathMapLabelLines('Multiplication and Exponentiation World'), ['Multiplication and', 'Exponentiation World'])
+  assert.deepEqual(pathMapLabelLines('Supercalifragilisticexpialidocious'), ['Supercalifragilisticexpialidocious'])
+})
+
+test('Multiplication and Exponentiation World is one column of levels under one two-line title', () => {
+  const layout = computePathMapLayout(nnvg9, { defaultColor: 'grey' })
+  assertNoPathOverLevels(layout)
+  const [last, next] = [node(layout, 'Multiplication', 8), node(layout, 'Power', 1)]
+  assert.equal(next.x, last.x)
+  assert.equal(next.color, 'sandstone')
+  // Advanced Multiplication World's path leaves between the two, so they are a column
+  // change apart, not one row.
+  assert.ok(next.y - last.y > PATH_MAP_ROW_HEIGHT)
+  assert.ok(segment(layout, 'edge:Multiplication:AdvMultiplication:out'))
+  const titles = layout.labels.filter(label => label.text === 'Multiplication and Exponentiation World')
+  assert.deepEqual(titles.map(label => label.world), ['Multiplication'])
+  assert.deepEqual(titles[0].lines, ['Multiplication and', 'Exponentiation World'])
+  // On two lines it fits above its own column, and the map is no wider for it.
+  assert.equal(titles[0].anchor, 'middle')
+  assert.equal(titles[0].x, last.x)
+  const oneLine = computePathMapLayout({ ...nnvg9, worlds: { ...nnvg9.worlds,
+    Multiplication: { ...nnvg9.worlds.Multiplication, title: 'Multiplication World' } } }, { defaultColor: 'grey' })
+  assert.equal(layout.bounds.x1, oneLine.bounds.x1)
+})
+
+test('a path leads into a bonus world from a world it waits for besides the one it branches off', () => {
+  const layout = computePathMapLayout(nnvg9, { defaultColor: 'grey' })
+  assertNoPathOverLevels(layout)
+  const [boss, bonus] = [node(layout, 'LessOrEqualBoss', 1), node(layout, 'PowerBonus', 1)]
+  assert.ok(segment(layout, 'bonus:Power:9:PowerBonus'))
+  const out = segment(layout, 'edge:LessOrEqualBoss:PowerBonus:out')
+  const into = segment(layout, 'edge:LessOrEqualBoss:PowerBonus:in')
+  assert.deepEqual(out.points[0], { x: boss.x, y: boss.y })
+  assert.deepEqual(out.source, { world: 'LessOrEqualBoss', level: 1 })
+  // It turns away half a row below ≤ World's boss, between the rows of levels, crosses
+  // to above the bonus level and drops onto it: in the bonus world's colour all the way.
+  const crossY = boss.y + PATH_MAP_ROW_HEIGHT / 2
+  assert.deepEqual(into.points.slice(1), [
+    { x: boss.x, y: crossY }, { x: bonus.x, y: crossY }, { x: bonus.x, y: bonus.y },
+  ])
+  assert.equal(into.color, 'sandstone')
+  // On the way it bridges the path down the middle column and the levels about powers.
+  const bridges = layout.segments.filter(s => s.bridge && s.key.startsWith('edge:LessOrEqualBoss:PowerBonus'))
+  assert.deepEqual(bridges.map(s => (s.points[0].x + s.points[1].x) / 2).sort((a, b) => a - b),
+    [node(layout, 'Power', 1).x, 0])
+  // No such path where the bonus lies above the world it waits for.
+  const above = computePathMapLayout({ ...nnvg9, edges: [...nnvg9.edges, ['AdvMultiplication', 'RewriteBonus']] },
+    { defaultColor: 'grey' })
+  assert.equal(above.segments.some(s => s.key.startsWith('edge:AdvMultiplication:RewriteBonus')), false)
+  // ≤ World's second part starts at its level 6 now, below Induction World's level 7.
+  assert.ok(node(layout, 'LessOrEqualJoined', 1).y > node(layout, 'InductionJoined', 4).y)
 })

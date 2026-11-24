@@ -14,7 +14,7 @@ import { PreferencesContext, WorldLevelIdContext} from './components/infoview/co
 import UsePreferences from "./state/hooks/use_preferences"
 import { loadGameLightModePreference } from './state/local_storage'
 import { useGetGameInfoQuery } from './state/api'
-import { loadGameVisualStyle, saveGameVisualStyle, worldSchemeOf } from './visual/worldScheme'
+import { loadGameVisualStyle, saveGameVisualStyle, VISUAL_STYLE_OF_SETTING, worldSchemeOf } from './visual/worldScheme'
 import i18n from './i18n';
 import { Popup } from './components/popup/popup';
 import { VisualRpcProvider } from './visual/VisualRpcProvider'
@@ -32,20 +32,6 @@ function App({ owner, repo }: { owner?: string, repo?: string } = {}) {
   const levelId = parseInt(params.levelId)
   const worldId = params.worldId
 
-  // A game with the neutral palette (`VisualNeutralPalette`) is drawn in greys and in
-  // the colours of the world being played. Until the game's data is here, the look it
-  // had last time stands in.
-  const gameInfo = useGetGameInfoQuery({ game: gameId }, { skip: !gameOwner || !gameRepo })
-  const visualStyle = gameInfo.data
-    ? (gameInfo.data.visualNeutralPalette ? 'neutral' : undefined)
-    : loadGameVisualStyle(gameId)
-  const worldScheme = visualStyle === 'neutral'
-    ? worldSchemeOf(gameInfo.data?.worlds?.nodes, worldId)
-    : undefined
-  React.useEffect(() => {
-    if (gameInfo.data) saveGameVisualStyle(gameId, gameInfo.data.visualNeutralPalette ? 'neutral' : undefined)
-  }, [gameId, gameInfo.data])
-
   const {
     mobile,
     layout,
@@ -56,6 +42,8 @@ function App({ owner, repo }: { owner?: string, repo?: string } = {}) {
     isVisualAutoBranchSwitching,
     isVisualFastExfalso,
     isVisualOpenAnyLevel,
+    isVisualFullComplete,
+    visualStyleSetting,
     setLayout,
     setIsSavePreferences,
     setLanguage,
@@ -64,7 +52,29 @@ function App({ owner, repo }: { owner?: string, repo?: string } = {}) {
     setIsVisualAutoBranchSwitching,
     setIsVisualFastExfalso,
     setIsVisualOpenAnyLevel,
+    setIsVisualFullComplete,
+    setVisualStyleSetting,
   } = UsePreferences()
+
+  // A game with the neutral palette (`VisualNeutralPalette`) is drawn in the colours of
+  // the world being played, page included. The "Visual Style" setting of its map's menu
+  // can make every background black, or draw the game in the classic palette's dark
+  // scheme. Whichever it is, the game has no light mode. Until the game's data is here,
+  // the look it had last time stands in.
+  const gameInfo = useGetGameInfoQuery({ game: gameId }, { skip: !gameOwner || !gameRepo })
+  const visualStyle = gameInfo.data
+    ? (gameInfo.data.visualNeutralPalette ? VISUAL_STYLE_OF_SETTING[visualStyleSetting] : undefined)
+    : loadGameVisualStyle(gameId)
+  const neutralLook = visualStyle === 'neutral' || visualStyle === 'neutral-black'
+  const worldScheme = neutralLook
+    ? worldSchemeOf(gameInfo.data?.worlds?.nodes, worldId)
+    : undefined
+  React.useEffect(() => {
+    if (gameInfo.data) saveGameVisualStyle(gameId, visualStyle)
+  }, [gameId, gameInfo.data, visualStyle])
+  // A light mode left over from another game, or from before the game had this look,
+  // doesn't apply.
+  const isLightMode = visualStyle === undefined && isVisualLightMode
 
   React.useEffect(() => {
     i18n.changeLanguage(language)
@@ -81,7 +91,7 @@ function App({ owner, repo }: { owner?: string, repo?: string } = {}) {
     const appRoot = document.querySelector('.app')
     const paletteBackground = appRoot ? getComputedStyle(appRoot).getPropertyValue('--pal-bg-start').trim() : ''
     const background = paletteBackground ? `rgb(${paletteBackground})` : ''
-    const scheme = isVisualLightMode ? 'light' : 'dark'
+    const scheme = isLightMode ? 'light' : 'dark'
     document.documentElement.style.backgroundColor = background
     document.documentElement.style.colorScheme = scheme
     document.body.style.backgroundColor = background
@@ -99,14 +109,15 @@ function App({ owner, repo }: { owner?: string, repo?: string } = {}) {
       document.head.appendChild(colorScheme)
     }
     colorScheme.content = scheme
-  }, [isVisualLightMode, visualStyle])
+  }, [isLightMode, visualStyle, worldScheme])
 
   return (
     <div
       className="app"
-      data-visual-theme={isVisualLightMode ? 'light' : 'dark'}
+      data-visual-theme={isLightMode ? 'light' : 'dark'}
       data-game-id={gameId}
-      data-visual-style={visualStyle}
+      data-visual-style={neutralLook ? 'neutral' : visualStyle}
+      data-visual-backdrop={visualStyle === 'neutral-black' ? 'black' : undefined}
       data-world-scheme={worldScheme}
     >
       <GameIdContext.Provider value={gameId}>
@@ -117,10 +128,12 @@ function App({ owner, repo }: { owner?: string, repo?: string } = {}) {
             isSavePreferences,
             language,
             isSuggestionsMobileMode,
-            isVisualLightMode,
+            isVisualLightMode: isLightMode,
             isVisualAutoBranchSwitching,
             isVisualFastExfalso,
             isVisualOpenAnyLevel,
+            isVisualFullComplete,
+            visualStyleSetting,
             setLayout,
             setIsSavePreferences,
             setLanguage,
@@ -129,6 +142,8 @@ function App({ owner, repo }: { owner?: string, repo?: string } = {}) {
             setIsVisualAutoBranchSwitching,
             setIsVisualFastExfalso,
             setIsVisualOpenAnyLevel,
+            setIsVisualFullComplete,
+            setVisualStyleSetting,
           }}>
             <VisualRpcProvider>
               <React.Suspense>

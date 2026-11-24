@@ -1,7 +1,7 @@
 // The Natural Numbers Video Game (Lean4Game/NNVG) against the native dev relay:
 // the path-style world map, the opening text level, Rewrite-only levels played with
-// rule-card clicks and the check mark, Proposition World on the canvas, the light
-// scheme, large windows, and what's painted frame by frame.
+// rule-card clicks and the check mark, Proposition World on the canvas, the one
+// scheme and each world's page, large windows, and what's painted frame by frame.
 const base = Cypress.env('LEAN4GAME_MOUNT') ?? ''
 const MAP = `${base}/g/local/NNVG/visual`
 const level = (world: string, n: number) => `${base}/g/local/NNVG/world/${world}/level/${n}/visual`
@@ -10,9 +10,11 @@ const LOAD_TIMEOUT = Number(Cypress.env('VISUAL_TIMEOUT') ?? 180000)
 type HarnessWindow = Cypress.AUTWindow & {
   __visualTestHarness?: {
     rewriteGoalInTransform(theoremName: string, workingSide?: 'left' | 'right', path?: number[], isReverse?: boolean): Promise<void>
+    runPlayerTactic(tactic: string): Promise<unknown>
     dragHypToGoal(hypName: string): Promise<void>
     dragHypToHyp(sourceName: string, targetName: string): Promise<void>
     dragTheoremToGoal(theoremName: string): Promise<void>
+    dragTheoremToHyp(theoremName: string, hypName: string): Promise<void>
     dragTacticToHyp(tacticName: string, hypName: string): Promise<void>
     clickGoal(playTactic?: string): Promise<void>
     clickHyp(hypName: string): Promise<void>
@@ -168,6 +170,14 @@ function check() {
   notProcessing()
   cy.get('[data-testid="rewrite-check"]', { timeout: LOAD_TIMEOUT }).should('be.visible').click()
   cy.get('[data-testid="rewrite-check"]', { timeout: LOAD_TIMEOUT }).should('have.class', 'completed')
+}
+
+/** The check mark on a goal of a level with a canvas: it closes the goal and takes the
+ * player back to Proposition Mode. */
+function checkBackToCanvas() {
+  notProcessing()
+  cy.get('[data-testid="rewrite-check"]', { timeout: LOAD_TIMEOUT }).should('be.visible').click()
+  cy.get('.tr-transformation-overlay', { timeout: LOAD_TIMEOUT }).should('not.exist')
 }
 
 function openRewriteLevel(n: number, world = 'Rewrite') {
@@ -348,20 +358,20 @@ describe('Natural Numbers Video Game', () => {
     // A world's title is grey until one of its levels can be played.
     const titleOf = (text: string) => cy.contains('[data-testid="path-map-world-label"]', text)
     // The grey of what can't be used yet (`--pal-inactive` in the neutral palette).
-    const lockedTitle = 'rgb(115, 115, 115)'
+    const lockedTitle = 'rgb(141, 151, 159)'
     titleOf('Rewrite World').should('have.attr', 'data-unlocked', 'false').and('have.css', 'fill', lockedTitle)
     titleOf('Proposition World').should('have.attr', 'data-unlocked', 'false').and('have.css', 'fill', lockedTitle)
     titleOf('Successor World').should('have.attr', 'data-unlocked', 'false').and('have.css', 'fill', lockedTitle)
     cy.get('[data-testid="path-map-world-label"]').then($labels => {
-      expect([...$labels].map(label => label.textContent)).to.have.members([
+      // A long title is on two lines, so it is read from its attribute.
+      expect([...$labels].map(label => label.getAttribute('data-title'))).to.have.members([
         'Rewrite World',
         'Proposition World',
         'Successor World',
         'Induction World',
         '≠ World',
-        'Multiplication World',
-        'Power World',
-        'Advanced Addition World',
+        'Multiplication and Exponentiation World',
+        'Logic World',
         '≤ World',
         'Advanced Multiplication World',
       ])
@@ -398,14 +408,20 @@ describe('Natural Numbers Video Game', () => {
     mapLevel('Successor', 3).should('have.attr', 'data-boss', 'true')
     mapLevel('SuccessorJoined', 3).should('have.attr', 'data-boss', 'true')
     mapLevel('PropositionRight', 8).should('have.attr', 'data-boss', 'true')
-    mapLevel('NeqBoss', 1).should('have.attr', 'data-boss', 'true')
-    mapLevel('Multiplication', 9).should('have.attr', 'data-boss', 'true')
+    mapLevel('NeqJoined', 1).should('have.attr', 'data-boss', 'true')
+    // Multiplication and Exponentiation World: a miniboss at its level 7, where the
+    // levels about powers begin, and its boss at the end.
+    mapLevel('Multiplication', 8).should('have.attr', 'data-boss', 'true')
+    mapLevel('Multiplication', 9).should('not.exist')
     mapLevel('Power', 9).should('have.attr', 'data-boss', 'true')
     mapLevel('PowerBonus', 1).should('have.attr', 'data-boss', 'true')
-    // Advanced Addition World ends at its boss, level 5.
-    mapLevel('AdvAddition', 5).should('have.attr', 'data-boss', 'true')
-    mapLevel('AdvAddition', 6).should('not.exist')
-    mapLevel('LessOrEqual', 10).should('have.attr', 'data-boss', 'true')
+    // Induction World has a miniboss past the ≠ World, and its boss at the end.
+    mapLevel('InductionJoined', 2).should('not.have.attr', 'data-boss')
+    mapLevel('InductionJoined', 4).should('have.attr', 'data-boss', 'true')
+    mapLevel('InductionDouble', 2).should('have.attr', 'data-boss', 'true')
+    mapLevel('InductionDouble', 3).should('not.exist')
+    mapLevel('LessOrEqualBoss', 1).should('have.attr', 'data-boss', 'true')
+    mapLevel('AdvMultiplication', 5).should('have.attr', 'data-boss', 'true')
     mapLevel('AdvMultiplication', 10).should('have.attr', 'data-boss', 'true')
     mapLevel('Rewrite', 5).should('not.have.attr', 'data-boss')
     mapLevel('Rewrite', 5).find('circle').then($small => {
@@ -415,7 +431,8 @@ describe('Natural Numbers Video Game', () => {
     })
     // Rewrite World leads to Successor World; Proposition World forks into it too.
     // Successor World forks into Induction World and the ≠ World, which all of
-    // Proposition World joins, and Induction World rejoins it for its last levels.
+    // Proposition World joins. Induction World's first part rejoins the ≠ World for its
+    // boss, which Induction World then waits for in turn, and ≤ World for both.
     for (const segment of [
       'edge:Rewrite:Successor:in',
       'edge:Successor:SuccessorJoined:in',
@@ -428,16 +445,27 @@ describe('Natural Numbers Video Game', () => {
       'edge:Induction:NeqJoined:in',
       'edge:Induction:Multiplication:in',
       'edge:Multiplication:Power:in',
-      'edge:NeqJoined:AdvAddition:in',
-      'edge:AdvAddition:LessOrEqual:in',
-      'edge:LessOrEqual:AdvMultiplication:in',
-      // Advanced Multiplication World needs ≤ World and Multiplication World only.
+      // Induction World carries on down its column: the game lists no edge for that,
+      // since the way round by the ≠ World's boss implies it.
+      'edge:Induction:InductionJoined:in',
+      'edge:NeqJoined:InductionJoined:in',
+      'edge:InductionJoined:InductionDouble:in',
+      // ≤ World follows the ≠ World, and waits for Induction World twice.
+      'edge:NeqJoined:LessOrEqual:in',
+      'edge:LessOrEqual:LessOrEqualJoined:in',
+      'edge:InductionJoined:LessOrEqualJoined:in',
+      'edge:LessOrEqualJoined:LessOrEqualBoss:in',
+      'edge:InductionDouble:LessOrEqualBoss:in',
+      'edge:LessOrEqualBoss:AdvMultiplication:in',
       'edge:Multiplication:AdvMultiplication:in',
+      // Logic World follows two bonus branches and the ≠ World.
+      'edge:PropositionBonusB:Logic:in',
+      'edge:PropositionBonusC:Logic:in',
+      'edge:NeqJoined:Logic:in',
       // The End is joined by the final bosses of three worlds.
       'edge:Power:Outro:in',
       'edge:AdvMultiplication:Outro:in',
-      'edge:NeqBoss:Outro:in',
-      'bonus:NeqJoined:1:NeqBoss',
+      'edge:Logic:Outro:in',
       'bonus:Power:9:PowerBonus',
       // Two bonuses leave Rewrite World's level 2, neither needing the other.
       'bonus:Rewrite:3:RewriteBonus',
@@ -450,10 +478,13 @@ describe('Natural Numbers Video Game', () => {
       cy.get(`[data-segment="${segment}"]`).should('exist')
     }
     cy.get('[data-segment="edge:Power:AdvMultiplication:in"]').should('not.exist')
-    cy.get('[data-segment="edge:AdvAddition:Outro:in"]').should('not.exist')
-    // Multiplication World's path comes across the middle column, which is empty
-    // there: no path crosses another, so nothing needs a bridge.
-    cy.get('[data-testid="path-map-bridge"]').should('not.exist')
+    cy.get('[data-segment="edge:NeqJoined:Outro:in"]').should('not.exist')
+    // Multiplication World's path comes across to the middle column and runs down it,
+    // over the path out of Induction World's last level, which it bridges twice. The
+    // path from ≤ World's boss to the bonus boss about Fermat crosses the whole map,
+    // over that middle column and over the levels about powers.
+    cy.get('[data-testid="path-map-bridge"]').should('have.length', 4)
+    cy.get('[data-segment="edge:LessOrEqualBoss:PowerBonus:in"]').should('exist')
     // Successor World has no bonus levels.
     cy.get('[data-segment^="bonus:Successor"]').should('not.exist')
     // Numbering restarts per stream, and bonuses are numbered as in the spec.
@@ -482,7 +513,9 @@ describe('Natural Numbers Video Game', () => {
       Number(/^M\s*(-?[\d.]+)/u.exec(Cypress.$(`[data-segment="${segment}"]`).attr('d')!)![1])
     for (const [world, n, first, second] of [
       ['Rewrite', 3, 'RewriteBonus', 'RewriteBonusB'],
-      ['PropositionRight', 8, 'PropositionBonusB', 'PropositionBonusC'],
+      // Both of these lead on to Logic World, so the longer one, C, is listed first:
+      // each one's path onwards then drops clear of the other's levels.
+      ['PropositionRight', 8, 'PropositionBonusC', 'PropositionBonusB'],
     ] as const) {
       mapLevel(world, n).find('circle').then($anchor => {
         const anchorX = Number($anchor.attr('cx'))
@@ -515,7 +548,22 @@ describe('Natural Numbers Video Game', () => {
     mapLevel('Neq', 1).should('contain.text', '0')
     mapLevel('Neq', 9).should('contain.text', '8')
     mapLevel('NeqJoined', 1).should('contain.text', '9')
-    mapLevel('NeqBoss', 1).should('contain.text', '10')
+    // Induction World, Multiplication and Exponentiation World, ≤ World and Advanced
+    // Multiplication World count from zero, across the Lean worlds they are split into.
+    mapLevel('Induction', 1).should('contain.text', '0')
+    mapLevel('Induction', 4).should('contain.text', '3')
+    mapLevel('InductionJoined', 1).should('contain.text', '4')
+    mapLevel('InductionDouble', 2).should('contain.text', '9')
+    mapLevel('Multiplication', 1).should('contain.text', '0')
+    mapLevel('Multiplication', 8).should('contain.text', '7')
+    mapLevel('Power', 1).should('contain.text', '8')
+    mapLevel('Power', 9).should('contain.text', '16')
+    mapLevel('LessOrEqual', 1).should('contain.text', '0')
+    mapLevel('LessOrEqualJoined', 1).should('contain.text', '6')
+    mapLevel('AdvMultiplication', 1).should('contain.text', '0')
+    mapLevel('AdvMultiplication', 10).should('contain.text', '9')
+    mapLevel('LessOrEqualBoss', 1).should('contain.text', '10')
+    mapLevel('Logic', 1).should('contain.text', '0')
     mapLevel('PowerBonus', 1).should('contain.text', 'A1')
     mapLevel('Outro', 1).should('have.attr', 'data-text-level', 'true')
     // The barrier: nothing leads past Successor World's boss yet.
@@ -530,15 +578,27 @@ describe('Natural Numbers Video Game', () => {
         .getBoundingClientRect()
       return { x: box.left + box.width / 2, y: box.top + box.height / 2 }
     }
-    cy.get('[data-testid="path-map-level"]').should('have.length', 97).then($levels => {
-      // ≤ World leaves Advanced Addition World to the right, and Advanced
-      // Multiplication World carries on below it.
-      expect(centre('LessOrEqual', 1).x).to.be.greaterThan(centre('AdvAddition', 5).x + 50)
-      expect(centre('LessOrEqual', 1).y).to.be.greaterThan(centre('AdvAddition', 5).y)
-      expect(centre('AdvMultiplication', 1).x).to.be.closeTo(centre('LessOrEqual', 10).x, 1)
-      expect(centre('AdvMultiplication', 1).y).to.be.greaterThan(centre('LessOrEqual', 10).y)
-      // Power World carries on below Multiplication World on the far left.
-      expect(centre('Power', 1).x).to.be.closeTo(centre('Multiplication', 9).x, 1)
+    cy.get('[data-testid="path-map-level"]').should('have.length', 98).then($levels => {
+      // ≤ World carries on below the ≠ World's boss on the right, in three stretches,
+      // and Advanced Multiplication World below it.
+      expect(centre('LessOrEqual', 1).x).to.be.closeTo(centre('NeqJoined', 1).x, 1)
+      expect(centre('LessOrEqual', 1).y).to.be.greaterThan(centre('NeqJoined', 1).y)
+      expect(centre('LessOrEqualJoined', 1).x).to.be.closeTo(centre('LessOrEqual', 6).x, 1)
+      expect(centre('LessOrEqualBoss', 1).x).to.be.closeTo(centre('LessOrEqual', 6).x, 1)
+      expect(centre('AdvMultiplication', 1).x).to.be.closeTo(centre('LessOrEqualBoss', 1).x, 1)
+      expect(centre('AdvMultiplication', 1).y).to.be.greaterThan(centre('LessOrEqualBoss', 1).y)
+      // Induction World carries on down its own column, below the ≠ World's boss, and
+      // its levels 7 and 9 are above the ≤ World levels that wait for them (6 and 10).
+      expect(centre('InductionJoined', 1).x).to.be.closeTo(centre('Induction', 4).x, 1)
+      expect(centre('InductionJoined', 1).y).to.be.greaterThan(centre('NeqJoined', 1).y)
+      expect(centre('InductionJoined', 4).y).to.be.lessThan(centre('LessOrEqualJoined', 1).y)
+      expect(centre('InductionDouble', 2).y).to.be.lessThan(centre('LessOrEqualBoss', 1).y)
+      // Logic World is to the right of ≤ World, below the bonus branches it follows.
+      expect(centre('Logic', 1).x).to.be.greaterThan(centre('LessOrEqual', 1).x + 50)
+      expect(centre('Logic', 1).y).to.be.greaterThan(centre('PropositionBonusB', 1).y)
+      // The levels about powers carry on below those about multiplication, on the far left.
+      expect(centre('Power', 1).x).to.be.closeTo(centre('Multiplication', 8).x, 1)
+      expect(centre('Multiplication', 1).x).to.be.lessThan(centre('Induction', 1).x - 50)
       // The End is in the middle, below everything.
       const end = centre('Outro', 1)
       expect(end.x).to.be.closeTo(centre('Intro', 1).x, 1)
@@ -554,7 +614,7 @@ describe('Natural Numbers Video Game', () => {
   it('keeps every world title clear of the paths and the levels', () => {
     visit(MAP, { fresh: true })
     mapLevel('Outro', 1).should('exist')
-    cy.get('[data-testid="path-map-world-label"]').should('have.length', 10).then($labels => {
+    cy.get('[data-testid="path-map-world-label"]').should('have.length', 9).then($labels => {
       const svg = Cypress.$('[data-testid="visual-path-map"]')[0] as unknown as SVGSVGElement
       // Points along every path, and every level's circle, in the map's own units
       // (whatever the window scales it to).
@@ -584,12 +644,18 @@ describe('Natural Numbers Video Game', () => {
         expect(levelGap, `gap between “${label.textContent}” and the nearest level`).to.be.greaterThan(3)
       }
     })
-    // Power World is entered from straight above, so its title sits to the left of the
-    // path; Advanced Multiplication World's sits to the right of its path.
-    const titleOf = (text: string) => cy.contains('[data-testid="path-map-world-label"]', text)
-    titleOf('Power World').should('have.attr', 'data-anchor', 'end')
-    titleOf('Advanced Multiplication World').should('have.attr', 'data-anchor', 'start')
-    titleOf('≤ World').should('have.attr', 'data-anchor', 'middle')
+    // Multiplication and Exponentiation World's title is long, so it is on two lines,
+    // and fits above its column like the others. Advanced Multiplication World's is to
+    // the left of its path, just above its first level: the other world's path turns in
+    // above it, and Logic World's path to The End runs down its right. ≤ World's is to the
+    // right of the path from the ≠ World's boss, which forks to both sides just above it.
+    const titleOf = (text: string) => cy.get(`[data-testid="path-map-world-label"][data-title="${text}"]`)
+    titleOf('Multiplication and Exponentiation World').should('have.attr', 'data-anchor', 'middle')
+      .find('tspan').should('have.length', 2)
+    titleOf('Advanced Multiplication World').should('have.attr', 'data-anchor', 'end')
+      .find('tspan').should('have.length', 1)
+    titleOf('≤ World').should('have.attr', 'data-anchor', 'start')
+    titleOf('Logic World').should('have.attr', 'data-anchor', 'middle')
     titleOf('Rewrite World').should('have.attr', 'data-anchor', 'middle')
   })
 
@@ -612,21 +678,32 @@ describe('Natural Numbers Video Game', () => {
       ['Rewrite', 6, 'On The Count of Three (Rewriting World Boss)'],
       ['PropositionRight', 8, 'The De Morgan\'s Law That Is Intuitionistically Valid (Proposition World Boss)'],
       ['SuccessorJoined', 3, 'Plug and Chug (Successor World Boss)'],
-      ['NeqBoss', 1, 'Equality in ℕ is Decidable (≠ World Boss)'],
-      ['Multiplication', 9, 'mul_assoc (Multiplication World Boss)'],
-      ['Power', 9, 'add_sq (Power World Boss)'],
-      ['AdvAddition', 5, 'add_right_eq_zero (Advanced Addition World Boss)'],
-      ['LessOrEqual', 10, '≤ is Total (≤ World Boss)'],
+      ['NeqJoined', 1, 'Zero or No Zero (≠ World Boss)'],
+      ['InductionDouble', 2, 'Equality in ℕ is Decidable (Induction World Boss)'],
+      ['Power', 9, 'FOILed Again (Multiplication and Exponentiation World Boss)'],
+      ['LessOrEqualBoss', 1, '≤ is Total (≤ World Boss)'],
       ['AdvMultiplication', 10, 'mul_left_cancel (Advanced Multiplication World Boss)'],
       // Bosses that aren't their world's last word keep a plain title.
       ['Successor', 3, 'Counting to Four (Miniboss)'],
+      ['InductionJoined', 2, 'add_right_eq_self'],
+      ['InductionJoined', 4, 'add_right_eq_zero (Miniboss)'],
+      ['Multiplication', 8, 'mul_assoc (Miniboss)'],
       ['AdvMultiplication', 5, 'le_mul_right'],
-      ['LessOrEqual', 6, 'Antisymmetry'],
+      ['LessOrEqualJoined', 1, 'Nothing Smaller than Zero'],
+      ['LessOrEqualJoined', 2, '≤ Add Right Cancel'],
+      ['LessOrEqualJoined', 3, 'Antisymmetry'],
+      ['Logic', 1, 'Double Elimination is Equivalent To LEM'],
       ['Outro', 1, 'The End'],
     ] as const) {
       tooltipOf(world, n).should('have.text', `🔒 ${title}`)
       leave(world, n)
     }
+    // A bonus level that waits for a world besides the one it branches off says which,
+    // as well as having a path from there.
+    tooltipOf('PowerBonus', 1).should('have.text', "🔒 Refute Fermat's Last Theorem? (needs ≤ World)")
+    leave('PowerBonus', 1)
+    tooltipOf('RewriteBonus', 1).should('have.text', '🔒 Fast Rewriting')
+    leave('RewriteBonus', 1)
     // No level's title has a pepper.
     cy.request('/data/g/local/NNVG/game.json').then(({ body }) => {
       const sizes = body.worldSize as Record<string, number>
@@ -643,25 +720,43 @@ describe('Natural Numbers Video Game', () => {
   it('opens The End once the three bosses before it are done', () => {
     visit(MAP, { fresh: true })
     mapLevel('Outro', 1).should('have.attr', 'data-state', 'locked')
-    // Everything The End follows but the ≠ boss: it stays locked, with two of its paths lit.
+    // Everything The End follows but Logic World: it stays locked, with two of its paths lit.
     const done = {
       Intro: 1, Rewrite: 6, Proposition: 8, PropositionRight: 8, Successor: 3, SuccessorJoined: 3, Induction: 4,
-      Neq: 9, NeqJoined: 1, Multiplication: 9, Power: 9, AdvAddition: 5, LessOrEqual: 10, AdvMultiplication: 10,
+      Neq: 9, NeqJoined: 1, InductionJoined: 4, InductionDouble: 2, Multiplication: 8, Power: 9,
+      LessOrEqual: 6, LessOrEqualJoined: 4, LessOrEqualBoss: 1, AdvMultiplication: 10,
     }
+    // The bonus boss off the last level about powers waits for ≤ World as well.
+    visitWithProgress({ ...done, LessOrEqualBoss: 0, AdvMultiplication: 0 })
+    mapLevel('Power', 9).should('have.attr', 'data-state', 'completed')
+    mapLevel('PowerBonus', 1).should('have.attr', 'data-state', 'locked')
+    cy.get('[data-segment="bonus:Power:9:PowerBonus"]').should('have.attr', 'data-lit', 'true')
+    cy.get('[data-segment="edge:LessOrEqualBoss:PowerBonus:in"]').should('have.attr', 'data-lit', 'false')
     visitWithProgress(done)
+    mapLevel('PowerBonus', 1).should('have.attr', 'data-state', 'frontier')
+    cy.get('[data-segment="edge:LessOrEqualBoss:PowerBonus:in"]').should('have.attr', 'data-lit', 'true')
     mapLevel('Outro', 1).should('have.attr', 'data-state', 'locked')
     cy.get('[data-segment="edge:Power:Outro:in"]').should('have.attr', 'data-lit', 'true')
     cy.get('[data-segment="edge:AdvMultiplication:Outro:in"]').should('have.attr', 'data-lit', 'true')
-    cy.get('[data-segment="edge:NeqBoss:Outro:in"]').should('have.attr', 'data-lit', 'false')
-    // Advanced Addition World's boss alone doesn't lead there: its path goes on to ≤ World.
-    cy.get('[data-segment="edge:AdvAddition:LessOrEqual:in"]').should('have.attr', 'data-lit', 'true')
+    cy.get('[data-segment="edge:Logic:Outro:in"]').should('have.attr', 'data-lit', 'false')
+    // Induction World's last level alone doesn't lead there: its path goes on to ≤ World.
+    cy.get('[data-segment="edge:InductionDouble:LessOrEqualBoss:in"]').should('have.attr', 'data-lit', 'true')
+    // Logic World waits for both bonus branches off Proposition World's boss.
+    mapLevel('Logic', 1).should('have.attr', 'data-state', 'locked')
+    cy.get('[data-segment="edge:NeqJoined:Logic:in"]').should('have.attr', 'data-lit', 'true')
+    visitWithProgress({ ...done, PropositionBonusB: 1 })
+    mapLevel('Logic', 1).should('have.attr', 'data-state', 'locked')
+    visitWithProgress({ ...done, PropositionBonusB: 1, PropositionBonusC: 3 })
+    mapLevel('Logic', 1).should('have.attr', 'data-state', 'frontier')
+    mapLevel('Outro', 1).should('have.attr', 'data-state', 'locked')
     // Without Advanced Multiplication World's boss it stays locked too.
-    visitWithProgress({ ...done, NeqBoss: 1, AdvMultiplication: 9 })
+    const logic = { PropositionBonusB: 1, PropositionBonusC: 3, Logic: 1 }
+    visitWithProgress({ ...done, ...logic, AdvMultiplication: 9 })
     mapLevel('Outro', 1).should('have.attr', 'data-state', 'locked')
     cy.get('[data-segment="edge:AdvMultiplication:Outro:in"]').should('have.attr', 'data-lit', 'false')
-    visitWithProgress({ ...done, NeqBoss: 1 })
+    visitWithProgress({ ...done, ...logic })
     // The map is drawn once the level data is in, which takes a moment after a visit.
-    cy.get('[data-segment="edge:NeqBoss:Outro:in"]', { timeout: LOAD_TIMEOUT }).should('have.attr', 'data-lit', 'true')
+    cy.get('[data-segment="edge:Logic:Outro:in"]', { timeout: LOAD_TIMEOUT }).should('have.attr', 'data-lit', 'true')
     mapLevel('Outro', 1).should('have.attr', 'data-state', 'frontier').click()
     cy.get('[data-testid="text-level-dialog"]').should('be.visible').and('contain.text', 'Thank you for playing!')
     cy.contains('.path-map-text-close', 'Continue').click()
@@ -702,20 +797,20 @@ describe('Natural Numbers Video Game', () => {
     cy.get('[data-testid="rewrite-check"]').should('be.visible')
     cy.wait(400)
     arrowStopsShortOf('.check-guide-arrow', '[data-testid="rewrite-check"]')
-    // A plain button: its mark is the grey of an open goal's card while it waits to be
-    // clicked (`--pal-goal` in the neutral palette), with no outline of that colour, no
-    // glow and no pulsing.
-    cy.get('[data-testid="rewrite-check"]').should('have.css', 'color', 'rgb(163, 163, 163)')
-      .and('not.have.css', 'border-top-color', 'rgb(163, 163, 163)')
+    // A plain button: its mark is the orange of an open goal's card while it waits to be
+    // clicked (the world's `-incomplete` in the neutral palette), with no outline of that
+    // colour, no glow and no pulsing.
+    cy.get('[data-testid="rewrite-check"]').should('have.css', 'color', 'rgb(234, 179, 8)')
+      .and('not.have.css', 'border-top-color', 'rgb(234, 179, 8)')
       .and('have.css', 'border-top-width', '1px')
       .and('have.css', 'box-shadow', 'none')
       .and('have.css', 'animation-iteration-count', '1')
     check()
     // Clicked, it lights up in the world's first colour (Rewriting World's lantern red),
     // and so does the finished level's tick.
-    cy.get('[data-testid="rewrite-check"]').should('have.css', 'background-color', 'rgb(255, 107, 94)')
+    cy.get('[data-testid="rewrite-check"]').should('have.css', 'background-color', 'rgb(255, 101, 90)')
     cy.get('.visual-header.completed', { timeout: LOAD_TIMEOUT }).should('exist')
-    cy.get('.visual-header-check').filter(':visible').first().should('have.css', 'color', 'rgb(255, 107, 94)')
+    cy.get('.visual-header-check').filter(':visible').first().should('have.css', 'color', 'rgb(255, 101, 90)')
     // The hint stays up once the level is finished.
     lessonsShouldContain('check mark')
 
@@ -1474,42 +1569,180 @@ describe('Natural Numbers Video Game', () => {
     shouldBeCompleted()
   })
 
-  it('offers the light scheme with a toggle to the left of the menu, and keeps it', () => {
-    visit(MAP, { fresh: true })
+  it('has one scheme: no light mode, a slate map, and a page of its own for each world with colours', () => {
+    // A light mode left over from before the game had this look doesn't apply.
+    cy.visit(MAP, {
+      onBeforeLoad(win) {
+        win.localStorage.clear()
+        win.localStorage.setItem('telemetryConsent', 'refused')
+        win.localStorage.setItem('visual_light_mode/g/local/NNVG', 'true')
+        win.localStorage.setItem('visual_style/g/local/NNVG', 'neutral')
+        recordFrames(win)
+      },
+    })
     mapLevel('Intro', 1).should('be.visible')
     cy.get('.app').should('have.attr', 'data-visual-theme', 'dark')
-    cy.get('.visual-map-theme-toggle').should('be.visible').then($toggle => {
-      cy.get('.visual-map-menu-btn').should($menu => {
-        expect($toggle[0]!.getBoundingClientRect().right).to.be.at.most($menu[0]!.getBoundingClientRect().left)
-      })
-    })
-    cy.get('.visual-map-theme-toggle').click()
-    cy.get('.app').should('have.attr', 'data-visual-theme', 'light')
+    cy.get('.visual-map-menu-btn').should('be.visible')
+    cy.get('.visual-map-theme-toggle').should('not.exist')
+    // The map is a blackboard's slate (`--pal-bg-start`), and no frame was light.
     cy.document().its('documentElement').should(html => {
-      expect(html.style.backgroundColor).to.equal('rgb(250, 250, 250)')
+      expect(html.style.backgroundColor).to.equal('rgb(64, 81, 89)')
     })
-
-    // A reload never paints the app dark first.
-    cy.visit(MAP, { onBeforeLoad: win => recordFrames(win) })
-    mapLevel('Intro', 1).should('be.visible')
     framesShould(frames => {
       const themes = frames.map(frame => frame.theme).filter(theme => theme !== null)
       expect(themes.length, 'frames with the app').to.be.greaterThan(0)
-      expect(themes.filter(theme => theme !== 'light'), 'frames not in the light scheme').to.deep.equal([])
+      expect(themes.filter(theme => theme !== 'dark'), 'frames in another scheme').to.deep.equal([])
     })
 
-    // Levels follow the map.
+    // A world with colours has a page of its own, a muted one: Proposition World's is
+    // `aqueduct`'s blue-grey.
     visit(level('Proposition', 1))
     cy.get('[data-testid="goal-card"]', { timeout: LOAD_TIMEOUT }).should('be.visible')
-    cy.get('.app').should('have.attr', 'data-visual-theme', 'light')
+    cy.get('.app').should('have.attr', 'data-visual-theme', 'dark')
+      .and('have.attr', 'data-world-scheme', 'aqueduct')
+    cy.document().its('documentElement').should(html => {
+      expect(html.style.backgroundColor).to.equal('rgb(53, 61, 70)')
+    })
+    // What is still to do is the world's `-incomplete`, the same orange in every world for now.
+    cy.get('.app').should($app => {
+      const style = getComputedStyle($app[0]!)
+      expect(style.getPropertyValue('--pal-goal').trim(), 'an open goal').to.equal('234, 179, 8')
+      expect(style.getPropertyValue('--pal-stream-pending').trim(), 'an open branch').to.equal('234, 179, 8')
+      expect(style.getPropertyValue('--pal-surface').trim(), "the world's own panels").to.equal(
+        style.getPropertyValue('--pal-world-aqueduct-surface').trim())
+    })
 
-    // Back to dark, for good.
-    visit(MAP)
-    cy.get('.visual-map-theme-toggle').should('be.visible').click()
-    cy.get('.app').should('have.attr', 'data-visual-theme', 'dark')
+    // A world that carries on another's path is played in that world's colours: the
+    // levels about powers are `sandstone`, as the ones about multiplication are.
+    visit(level('Power', 1))
+    cy.get('.visual-header', { timeout: LOAD_TIMEOUT }).should('be.visible')
+    cy.get('.app').should('have.attr', 'data-world-scheme', 'sandstone')
+  })
+
+  it('has a Visual Style setting in the map menu: Standard, Standard Black and High Contrast', () => {
+    const fillOf = (world: string) => mapLevel(world, 1).find('circle')
+    const pageShouldBe = (colour: string) => cy.document().its('documentElement').should(html => {
+      expect(html.style.backgroundColor).to.equal(colour)
+    })
+    const paletteShouldHave = (name: string, value: string) => cy.get('.app').should($app => {
+      expect(getComputedStyle($app[0]!).getPropertyValue(name).trim(), name).to.equal(value)
+    })
+    const setting = () => cy.get('[data-testid="visual-style-setting"]')
+    /** Step the setting on, and wait for it to be saved (a moment after it changes). */
+    const next = (label: string) => {
+      setting().click()
+      setting().should('contain.text', 'Visual Style').and('contain.text', label)
+      cy.wait(1200)
+    }
+    visitWithProgress({ Intro: 1, Rewrite: 6, Power: 9, Logic: 1 })
+    mapLevel('Intro', 1).should('exist')
+    // Standard, the neutral look: a world in its scheme's colour, on the slate. (The
+    // levels about powers carry on Multiplication and Exponentiation World's `sandstone`.)
+    cy.get('.app').should('have.attr', 'data-visual-style', 'neutral').and('not.have.attr', 'data-visual-backdrop')
+    fillOf('Rewrite').should('have.css', 'fill', 'rgb(255, 101, 90)')
+    fillOf('Power').should('have.css', 'fill', 'rgb(111, 205, 255)')
+    fillOf('Logic').should('have.css', 'fill', 'rgb(169, 220, 255)')
+    cy.get('.visual-map-menu-btn').click()
+    setting().should('be.visible').and('contain.text', 'Standard').and('not.contain.text', 'Black')
+
+    // Standard Black: the same colours, with black behind them.
+    next('Standard Black')
+    cy.get('.app').should('have.attr', 'data-visual-style', 'neutral').and('have.attr', 'data-visual-backdrop', 'black')
+    pageShouldBe('rgb(0, 0, 0)')
+    fillOf('Rewrite').should('have.css', 'fill', 'rgb(255, 101, 90)')
+    fillOf('Power').should('have.css', 'fill', 'rgb(111, 205, 255)')
+    // In a level too: the world's colours, and black where its own page and panels were.
+    visit(level('Rewrite', 1))
+    expectRewriteOnlyLevel()
+    cy.get('.app').should('have.attr', 'data-world-scheme', 'lantern').and('have.attr', 'data-visual-backdrop', 'black')
+    pageShouldBe('rgb(0, 0, 0)')
+    paletteShouldHave('--pal-bg-end', '0, 0, 0')
+    paletteShouldHave('--pal-surface', '0, 0, 0')
+    paletteShouldHave('--pal-first', '255, 101, 90')
+
+    // It is kept, and the map opens in it straight away.
     cy.visit(MAP)
-    mapLevel('Intro', 1).should('be.visible')
-    cy.get('.app').should('have.attr', 'data-visual-theme', 'dark')
+    mapLevel('Intro', 1).should('exist')
+    cy.get('.app').should('have.attr', 'data-visual-backdrop', 'black')
+    pageShouldBe('rgb(0, 0, 0)')
+
+    // High Contrast: the classic dark map, with each world in a plain colour: amber
+    // for `lantern`, purple for `frost`, and orange for `sandstone`, all the way down.
+    cy.get('.visual-map-menu-btn').click()
+    next('High Contrast')
+    cy.get('.app').should('have.attr', 'data-visual-style', 'high-contrast')
+      .and('have.attr', 'data-visual-theme', 'dark').and('not.have.attr', 'data-visual-backdrop')
+    pageShouldBe('rgb(15, 23, 42)')
+    fillOf('Rewrite').should('have.css', 'fill', 'rgb(245, 158, 11)')
+    fillOf('Power').should('have.css', 'fill', 'rgb(249, 115, 22)')
+    fillOf('Logic').should('have.css', 'fill', 'rgb(139, 92, 246)')
+    // Still no light mode.
+    cy.get('.visual-map-theme-toggle').should('not.exist')
+    // A level is in the classic colours too, with no page of its world's.
+    visit(level('Rewrite', 1))
+    expectRewriteOnlyLevel()
+    cy.get('.app').should('have.attr', 'data-visual-style', 'high-contrast').and('not.have.attr', 'data-world-scheme')
+    paletteShouldHave('--pal-accent', '139, 92, 246')
+    paletteShouldHave('--pal-bg-start', '15, 23, 42')
+    pageShouldBe('rgb(15, 23, 42)')
+
+    // One more step is Standard again.
+    cy.visit(MAP)
+    mapLevel('Intro', 1).should('exist')
+    cy.get('.app').should('have.attr', 'data-visual-style', 'high-contrast')
+    cy.get('.visual-map-menu-btn').click()
+    setting().click()
+    setting().should('contain.text', 'Standard').and('not.contain.text', 'Black')
+    cy.get('.app').should('have.attr', 'data-visual-style', 'neutral').and('not.have.attr', 'data-visual-backdrop')
+    pageShouldBe('rgb(64, 81, 89)')
+    fillOf('Rewrite').should('have.css', 'fill', 'rgb(255, 101, 90)')
+  })
+
+  it('has a Full Complete setting in the map menu: every level shown as finished, the progress kept', () => {
+    const setting = () => cy.contains('.visual-map-menu-toggle', 'Full Complete')
+    const unfinished = ($levels: JQuery<HTMLElement>) =>
+      [...$levels].filter(node => node.getAttribute('data-state') !== 'completed')
+        .map(node => `${node.getAttribute('data-world')} ${node.getAttribute('data-level')}`)
+    visit(MAP, { fresh: true })
+    mapLevel('Intro', 1).should('have.attr', 'data-state', 'frontier')
+    mapLevel('Rewrite', 1).should('have.attr', 'data-state', 'locked')
+
+    // Switched on, every level is drawn as finished, in its world's colour, and every
+    // world's title is lit.
+    cy.get('.visual-map-menu-btn').click()
+    setting().should('be.visible').and('have.attr', 'aria-pressed', 'false').click()
+    setting().should('have.attr', 'aria-pressed', 'true')
+    cy.get('[data-testid="path-map-level"]').should($levels => {
+      expect($levels.length).to.be.greaterThan(90)
+      expect(unfinished($levels), 'levels not shown as finished').to.deep.equal([])
+    })
+    mapLevel('Rewrite', 1).find('circle').should('have.css', 'fill', 'rgb(255, 101, 90)')
+    mapLevel('AdvMultiplication', 10).find('circle').should('have.css', 'fill', 'rgb(255, 138, 99)')
+    cy.get('[data-testid="path-map-world-label"]').should($labels => {
+      expect([...$labels].filter(label => label.getAttribute('data-unlocked') !== 'true').map(label => label.textContent),
+        'titles still grey').to.deep.equal([])
+    })
+    // The setting is saved a moment after it is changed.
+    cy.wait(1200)
+
+    // A level far down the map opens, and its Next button isn't held back.
+    cy.get('.visual-map-menu-btn').click()
+    mapLevel('Neq', 5).click()
+    cy.location('pathname').should('include', '/world/Neq/level/5')
+    cy.get('[data-testid="goal-card"]', { timeout: LOAD_TIMEOUT }).should('be.visible')
+    cy.contains('.visual-header button', 'Next level').should('not.be.disabled')
+
+    // It is kept over a reload. Switched off, the map is the player's own again: nothing
+    // was marked as finished in the saved progress.
+    visit(MAP)
+    mapLevel('Rewrite', 1).should('have.attr', 'data-state', 'completed')
+    cy.get('.visual-map-menu-btn').click()
+    setting().should('have.attr', 'aria-pressed', 'true').click()
+    mapLevel('Intro', 1).should('have.attr', 'data-state', 'frontier')
+    mapLevel('Rewrite', 1).should('have.attr', 'data-state', 'locked')
+    cy.window().then(win => {
+      expect(win.localStorage.getItem('game_progress') ?? '', 'the saved progress').not.to.include('"completed":true')
+    })
   })
 
   it('scales the interface up on large windows, without breaking dragging', () => {
@@ -1656,7 +1889,7 @@ describe('Natural Numbers Video Game', () => {
       const border = getComputedStyle($card[0]!)
       expect(border.borderTopStyle).to.equal('double')
       // The theorems' colour: Successor World's second, where the classic palette has blue.
-      expect(border.borderTopColor, "the theorems' colour").to.equal('rgba(82, 211, 187, 0.4)')
+      expect(border.borderTopColor, "the theorems' colour").to.equal('rgba(63, 227, 200, 0.4)')
       expect(getComputedStyle($card[0]!, '::after').content, 'no outline of its own inside').to.equal('none')
     })
     rewrite('MyNat.one_eq_succ_zero', 'left', [2])
@@ -1720,19 +1953,26 @@ describe('Natural Numbers Video Game', () => {
     cy.contains('.tr-tab-btn', '012').click()
     clickRuleInDirection('two_eq_succ_one', true)
     relationShouldBe('2 = 2')
-    check()
+    // The check mark closes the goal and takes the player back to Proposition Mode, to
+    // the finished proof. The hint that sent them to Rewriting Mode has been followed, so
+    // it isn't there any more.
+    checkBackToCanvas()
     shouldBeCompleted()
-    // Back out to Proposition Mode, where the finished proof keeps its hint.
-    cy.get('.tr-back-btn').should('be.visible').click()
-    cy.get('.tr-transformation-overlay').should('not.exist')
     cy.get('.visual-header.completed', { timeout: LOAD_TIMEOUT }).should('exist')
-    goalHintShouldContain('double-clicking the goal')
+    cy.contains('double-clicking the goal').should('not.exist')
   })
 
   it('crosses the beams (1): Rewriting Mode on a hypothesis, then back to the canvas', () => {
     openCanvasLevel('SuccessorJoined', 2)
     headerShouldNameLevel('5', 'Crossing the Beams (1)')
     goalShouldBe('y = 0')
+    hintShouldContain('We can also enter hypotheses in Rewriting Mode.')
+
+    // A look at Rewriting Mode without a rewrite leaves the hint up.
+    harness(h => h.openHypTransform('hx'))
+    cy.get('.tr-rule-dock[data-layout-ready="true"]', { timeout: LOAD_TIMEOUT }).should('exist')
+    cy.get('.tr-back-btn').click()
+    cy.get('.tr-transformation-overlay').should('not.exist')
     hintShouldContain('We can also enter hypotheses in Rewriting Mode.')
 
     // Rewrite `hx` into `x = 2`, with a hint for each step.
@@ -1750,6 +1990,9 @@ describe('Natural Numbers Video Game', () => {
     arrowStopsShortOf('.back-guide-arrow', '.tr-back-btn')
     cy.get('.tr-back-btn').click()
     cy.get('.tr-transformation-overlay').should('not.exist')
+    // Back in Proposition Mode with `hx` rewritten, the hint that asked for it is gone.
+    cy.get('[data-testid="hyp-card"][data-hyp-type="x = 2"]', { timeout: LOAD_TIMEOUT }).should('exist')
+    cy.contains('We can also enter hypotheses in Rewriting Mode.').should('not.exist')
 
     // `x = 2` is what `hy` asks for.
     dragCard('x = 2', 'x = 2 → y = 0')
@@ -1793,38 +2036,55 @@ describe('Natural Numbers Video Game', () => {
       expect(lessons.left + lessons.width / 2, 'in the middle').to.be.closeTo((sidebar + header.right) / 2, 2)
     })
     cy.get('[data-brick-id="fn_add"]').click()
-    hintShouldContain('Now we can slot in the')
+    hintShouldContain('so now we can slot in the')
     cy.get('[data-brick-id="num_3"]').click()
-    hintShouldContain('Now we can slot in the')
+    hintShouldContain('so now we can slot in the')
     cy.get('[data-brick-id="num_3"]').click()
     hintShouldContain('to return to Proposition Mode')
     arrowStopsShortOf('.specialize-guide-arrow', '[data-testid="specialize-done"]')
     cy.get('[data-testid="specialize-done"]').click()
     cy.get('.tr-construction-overlay', { timeout: LOAD_TIMEOUT }).should('not.exist')
-    // Back on the canvas with `3 + 3 = 3 + 3`, the opening hint is gone.
+    // Back on the canvas with `3 + 3 = 3 + 3`, the opening hint has been followed and is gone.
     hypShouldExist('thm_h')
     cy.contains("We've unlocked a new proposition").should('not.exist')
     harness(h => h.dragHypToHyp('thm_h', 'hy'))
     cy.get('[data-testid="hyp-card"][data-hyp-type="y = 0"]', { timeout: LOAD_TIMEOUT }).should('exist')
+    // `3 + 3 = 3 + 3` has been used up, so the state reads as it did at the start: the
+    // hint still doesn't come back, here or once the level is finished.
+    notProcessing()
+    cy.contains("We've unlocked a new proposition").should('not.exist')
+    cy.get('.combining-instruction-arrow').should('not.exist')
     dragCardToGoal('y = 0')
     shouldBeCompleted()
+    cy.get('.visual-header.completed', { timeout: LOAD_TIMEOUT }).should('exist')
+    cy.contains("We've unlocked a new proposition").should('not.exist')
+    cy.get('.combining-instruction-arrow').should('not.exist')
   })
 
-  it('matches `reflection` to each goal it is dragged onto, in Pattern Matching', () => {
+  // A window with room for the level's four propositions beside the open proof sidebar
+  // and the variables' column: at this suite's usual 1000x660 the last one has nowhere
+  // to go but under the goal.
+  it('matches `succ_inj` to the hypothesis it is dragged onto, in Pattern Matching', { viewportWidth: 1280, viewportHeight: 720 }, () => {
+    // `succ_inj` comes a level earlier, as level 4.
     openCanvasLevel('Neq', 5)
-    headerShouldNameLevel('4', 'Pattern Matching')
-    goalHintShouldContain('straight to the goal to automatically match it')
-    clickGoal()
-    goalShouldBe('S 0 = S 0')
-    harness(h => h.dragTheoremToGoal('MyNat.reflection'))
-    nextUnsolvedBranch()
-    goalShouldBe('1 = 1 ∧ 2 + 2 + 2 = 2 + 2 + 2')
-    clickGoal()
-    goalShouldBe('1 = 1')
-    harness(h => h.dragTheoremToGoal('MyNat.reflection'))
-    nextUnsolvedBranch()
-    goalShouldBe('2 + 2 + 2 = 2 + 2 + 2')
-    harness(h => h.dragTheoremToGoal('MyNat.reflection'))
+    headerShouldNameLevel('4', 'succ_inj')
+    goalShouldBe('x = 3')
+    trayShouldHaveCard('succ_inj', true)
+
+    openCanvasLevel('Neq', 6)
+    headerShouldNameLevel('5', 'Pattern Matching')
+    goalHintShouldContain('straight onto h to automatically apply it')
+    goalShouldBe('x = y')
+    cy.get('[data-testid="hyp-card"][data-hyp-type="S(S(S(x))) = S(S(S(y)))"]').should('exist')
+    // Each drop peels one successor off both sides, with nothing to specialize by hand.
+    harness(h => h.dragTheoremToHyp('MyNat.succ_inj', 'h'))
+    cy.get('[data-testid="hyp-card"][data-hyp-type="S(S(x)) = S(S(y))"]', { timeout: LOAD_TIMEOUT }).should('exist')
+    cy.get('.tr-construction-overlay').should('not.exist')
+    harness(h => h.dragTheoremToHyp('MyNat.succ_inj', 'thm_succ_inj'))
+    cy.get('[data-testid="hyp-card"][data-hyp-type="S(x) = S(y)"]', { timeout: LOAD_TIMEOUT }).should('exist')
+    harness(h => h.dragTheoremToHyp('MyNat.succ_inj', 'thm_succ_inj1'))
+    cy.get('[data-testid="hyp-card"][data-hyp-type="x = y"]', { timeout: LOAD_TIMEOUT }).should('exist')
+    dragCardToGoal('x = y')
     shouldBeCompleted()
   })
 
@@ -1836,7 +2096,8 @@ describe('Natural Numbers Video Game', () => {
     // `zero_ne_one` comes with finishing this level, in the next one.
     trayShouldHaveCard('zero_ne_one', false)
     openCanvasLevel('Neq', 9)
-    headerShouldNameLevel('8', '2 ≠ 4')
+    headerShouldNameLevel('8', '2 ≠ 3')
+    goalShouldBe('2 ≠ 3')
     trayShouldHaveCard('zero_ne_one', true)
     trayShouldHaveCard('one_ne_zero', true)
   })
@@ -1844,7 +2105,10 @@ describe('Natural Numbers Video Game', () => {
   it('proves an equality as a proposition, with Rewrite Mode off for the goal', () => {
     openCanvasLevel('Neq', 1)
     headerShouldNameLevel('0', 'Equalities are Propositions (0)')
+    goalShouldBe('∀ (x : ℕ), x = 1 → x = 1')
     goalHintShouldContain('Equalities are propositions just like any other')
+    clickGoal()
+    goalShouldBe('x = 1 → x = 1')
     clickGoal()
     goalShouldBe('x = 1')
     // Rewrite Mode on the goal is refused, with a warning in place of the overlay.
@@ -1934,7 +2198,7 @@ describe('Natural Numbers Video Game', () => {
   it('proves zero_add by induction on the canvas, fixing `n` first', () => {
     visit(level('Induction', 1))
     cy.get('[data-testid="goal-card"]', { timeout: LOAD_TIMEOUT }).should('be.visible')
-    headerShouldNameLevel('1', 'zero_add')
+    headerShouldNameLevel('0', 'zero_add')
     goalShouldBe('∀ (n : ℕ), 0 + n = n')
     goalHintShouldContain('to fix')
     clickGoal()
@@ -1951,11 +2215,15 @@ describe('Natural Numbers Video Game', () => {
     cy.get('#visual_tactic_induction').should('have.class', 'disabled')
     notProcessing()
     cy.get('[data-testid="stream-nav-next"]:not(:disabled)', { timeout: LOAD_TIMEOUT }).filter(':visible').first().click()
-    goalShouldBe('0 + S d = S d')
+    // Splitting `n` names the new number `n1`, and the proof says so.
+    goalShouldBe('0 + S n1 = S n1')
+    hypShouldExist('n1')
+    hypShouldExist('hn1')
+    cy.contains('induction n with n1 hn1').should('exist')
     inductionUses().should('have.text', 'x0')
-    harness(h => h.dragTacticToHyp('induction', 'd'))
+    harness(h => h.dragTacticToHyp('induction', 'n1'))
     notProcessing()
-    goalShouldBe('0 + S d = S d')
+    goalShouldBe('0 + S n1 = S n1')
     // Undo gives the use back; taking it again spends it again.
     cy.get('button[aria-label="Undo"]').filter(':visible').first().click()
     goalShouldBe('0 + n = n')
@@ -1977,19 +2245,19 @@ describe('Natural Numbers Video Game', () => {
 
     // The inductive step.
     nextUnsolvedBranch()
-    goalShouldBe('0 + S d = S d')
+    goalShouldBe('0 + S n1 = S n1')
     notProcessing()
     cy.get('[data-testid="goal-card"]').filter(':visible').first().dblclick()
     cy.get('.tr-transformation-overlay', { timeout: LOAD_TIMEOUT }).should('be.visible')
     cy.get('.tr-rule-dock[data-layout-ready="true"]', { timeout: LOAD_TIMEOUT }).should('exist')
     clickRule('add_succ')
-    relationShouldBe('S(0 + d) = S(d)')
-    clickRule('hd')
-    relationShouldBe('S(d) = S(d)')
+    relationShouldBe('S(0 + n1) = S(n1)')
+    clickRule('hn1')
+    relationShouldBe('S(n1) = S(n1)')
     // Back on the canvas, a click closes a goal `a = a`: it needn't be entered again.
     cy.get('.tr-back-btn').click()
     cy.get('.tr-transformation-overlay').should('not.exist')
-    goalShouldBe('S d = S d')
+    goalShouldBe('S n1 = S n1')
     notProcessing()
     cy.get('[data-testid="goal-card"]').filter(':visible').first().should('have.class', 'clickable').click()
     shouldBeCompleted()
@@ -1997,43 +2265,49 @@ describe('Natural Numbers Video Game', () => {
 
   it('still introduces and splits goals with a click', () => {
     openCanvasLevel('Neq', 3)
-    goalShouldBe('x = 1 → x = 1 ∧ (S x = 2 ∨ 1 = 0)')
+    goalShouldBe('∀ (x : ℕ), x = 1 → x = 1 ∧ (S x = 2 ∨ 1 = 0)')
     cy.get('[data-testid="goal-card"]').filter(':visible').first().should('have.class', 'clickable')
+    clickGoal()
+    goalShouldBe('x = 1 → x = 1 ∧ (S x = 2 ∨ 1 = 0)')
     clickGoal()
     goalShouldBe('x = 1 ∧ (S x = 2 ∨ 1 = 0)')
     clickGoal()
     goalShouldBe('x = 1')
   })
 
-  it('shows the ≠ boss its hint until induction has been done twice, the right way round', () => {
-    const hint = 'You may want to revisit this level'
-    openCanvasLevel('NeqBoss', 1)
-    headerShouldNameLevel('10', 'Equality in ℕ is Decidable (≠ World Boss)')
+  it('shows the Induction World boss its hint until induction has been done twice, the right way round', () => {
+    const hint = 'Don’t forget to apply double induction properly!'
+    const inductionUses = () => cy.get('[data-testid="tactic-uses"][data-tactic-name="induction"]').filter(':visible')
+    openCanvasLevel('InductionDouble', 2)
+    headerShouldNameLevel('9', 'Equality in ℕ is Decidable (Induction World Boss)')
     goalShouldBe('∀ (a b : ℕ), a = b ∨ a ≠ b')
     goalHintShouldContain(hint)
+    // Two inductions on each branch of this proof.
+    cy.contains('.theorem-tray-panel button', 'Tactics').click()
+    inductionUses().should('have.text', 'x2')
     // Fix `a`, induct on it, fix `b`: the hint is still up.
     clickGoal()
     goalShouldBe('∀ (b : ℕ), a = b ∨ a ≠ b')
     harness(h => h.dragTacticToHyp('induction', 'a'))
     goalShouldBe('∀ (b : ℕ), 0 = b ∨ 0 ≠ b')
+    inductionUses().should('have.text', 'x1')
     clickGoal()
     goalShouldBe('0 = b ∨ 0 ≠ b')
     goalHintShouldContain(hint)
-    // The second induction takes it down.
+    // The second induction takes it down, and is the last one here.
     harness(h => h.dragTacticToHyp('induction', 'b'))
     goalShouldBe('0 = 0 ∨ 0 ≠ 0')
     cy.contains(hint).should('not.exist')
-    // The ≠ World has no limit on inductions: only Induction World counts them.
-    cy.get('[data-testid="tactic-uses"]').should('not.exist')
+    inductionUses().should('have.text', 'x0')
     // It stays down in the other case of `a`, where the hypothesis holds for every `b`.
     clickGoal('click_goal_left')
     goalShouldBe('0 = 0')
     cy.contains(hint).should('not.exist')
   })
 
-  it('brings the ≠ boss its hint back when `b` was fixed before the induction on `a`', () => {
-    const hint = 'You may want to revisit this level'
-    openCanvasLevel('NeqBoss', 1)
+  it('brings the Induction World boss its hint back when `b` was fixed before the induction on `a`', () => {
+    const hint = 'Don’t forget to apply double induction properly!'
+    openCanvasLevel('InductionDouble', 2)
     goalShouldBe('∀ (a b : ℕ), a = b ∨ a ≠ b')
     clickGoal()
     goalShouldBe('∀ (b : ℕ), a = b ∨ a ≠ b')
@@ -2042,26 +2316,365 @@ describe('Natural Numbers Video Game', () => {
     harness(h => h.dragTacticToHyp('induction', 'a'))
     goalShouldBe('0 = b ∨ 0 ≠ b')
     goalHintShouldContain(hint)
-    // In the `S(d)` case the inductive hypothesis is about this one `b` only.
+    // In the `S(a1)` case the inductive hypothesis is about this one `b` only.
     notProcessing()
     cy.get('[data-testid="stream-nav-next"]:not(:disabled)', { timeout: LOAD_TIMEOUT }).filter(':visible').first().click()
-    goalShouldBe('S d = b ∨ S d ≠ b')
+    goalShouldBe('S a1 = b ∨ S a1 ≠ b')
     goalHintShouldContain(hint)
     harness(h => h.dragTacticToHyp('induction', 'b'))
-    goalShouldBe('S d = 0 ∨ S d ≠ 0')
+    goalShouldBe('S a1 = 0 ∨ S a1 ≠ 0')
     goalHintShouldContain(hint)
   })
 
-  it('ends Advanced Addition World at its boss, and unlocks the mirror image in ≤ World', () => {
-    openCanvasLevel('AdvAddition', 5)
-    headerShouldNameLevel('5', 'add_right_eq_zero (Advanced Addition World Boss)')
-    cy.get('[data-testid="theorem-tray-card"]', { timeout: LOAD_TIMEOUT }).should('have.length.greaterThan', 0)
+  it('teaches double induction: induct on `a` before `b` is introduced, or it is a dead end', () => {
+    const opening = 'try inducting on'
+    const deadEnd = 'This is a dead end'
+    openCanvasLevel('InductionDouble', 1)
+    headerShouldNameLevel('8', 'Double Induction')
+    goalShouldBe('∀ (a b : ℕ), a + a = b + b → a = b')
+    goalHintShouldContain(opening)
+    // With `a` fixed the advice still holds.
+    clickGoal()
+    goalShouldBe('∀ (b : ℕ), a + a = b + b → a = b')
+    goalHintShouldContain(opening)
+    // Fixing `b` as well is going too far, whatever is tried from there.
+    clickGoal()
+    goalShouldBe('a + a = b + b → a = b')
+    goalHintShouldContain(deadEnd)
+    cy.contains(opening).should('not.exist')
+    harness(h => h.dragTacticToHyp('induction', 'a'))
+    goalShouldBe('0 + 0 = b + b → 0 = b')
+    goalHintShouldContain(deadEnd)
+    // Two undos lead back to where the advice was, and following it clears the hints.
+    for (let undo = 0; undo < 2; undo += 1) {
+      notProcessing()
+      cy.get('button[aria-label="Undo"]').filter(':visible').first().click()
+    }
+    goalShouldBe('∀ (b : ℕ), a + a = b + b → a = b')
+    goalHintShouldContain(opening)
+    harness(h => h.dragTacticToHyp('induction', 'a'))
+    goalShouldBe('∀ (b : ℕ), 0 + 0 = b + b → 0 = b')
+    cy.contains(opening).should('not.exist')
+    cy.contains(deadEnd).should('not.exist')
+    // Nor do they come back with `b` fixed after the induction, as it should be.
+    clickGoal()
+    goalShouldBe('0 + 0 = b + b → 0 = b')
+    notProcessing()
+    cy.contains(opening).should('not.exist')
+    cy.contains(deadEnd).should('not.exist')
+  })
+
+  it('carries Induction World on past the ≠ World: cancellation, `cases`, and what comes with each level', () => {
+    const uses = (tactic: string) => cy.get(`[data-testid="tactic-uses"][data-tactic-name="${tactic}"]`)
+    const trayIsLoaded = () => cy.get('[data-testid="theorem-tray-card"]', { timeout: LOAD_TIMEOUT }).should('have.length.greaterThan', 0)
+    const tacticsTab = () => cy.get('.theorem-tray-panel .tr-tab-btn[data-tray-tab="tactics"]')
+    openCanvasLevel('InductionJoined', 1)
+    headerShouldNameLevel('4', 'add_right_cancel')
+    goalShouldBe('∀ (a b n : ℕ), a + n = b + n → a = b')
+    trayIsLoaded()
+    trayShouldHaveCard('add_right_cancel', false)
+    // Finishing it gives the theorem and its mirror image. The numbers of the next
+    // one are named on its card as they are in its level.
+    openCanvasLevel('InductionJoined', 2)
+    headerShouldNameLevel('5', 'add_right_eq_self')
+    goalShouldBe('∀ (a b : ℕ), a + b = a → b = 0')
+    trayIsLoaded()
+    trayShouldHaveCard('add_right_cancel', true)
+    trayShouldHaveCard('add_left_cancel', true)
+    trayShouldHaveCard('add_left_eq_self', false)
+    // Level 6 brings the cases card, once, and allows no induction: a tactic is only
+    // for the levels that say so.
+    openCanvasLevel('InductionJoined', 3)
+    headerShouldNameLevel('6', 'Zero or No Zero?')
+    goalShouldBe('∀ (n : ℕ), n = 0 ∨ n ≠ 0')
+    goalHintShouldContain('weaker cousin')
+    trayIsLoaded()
+    trayShouldHaveCard('add_left_eq_self', true)
+    // The Tactics tab glows while a use is left on the branch, selected or not.
+    tacticsTab().should('have.class', 'tactics-ready').click()
+    tacticsTab().should('have.class', 'tactics-ready')
+    uses('cases').filter(':visible').should('have.text', 'x1')
+    uses('induction').filter(':visible').should('have.text', 'x0')
+    cy.get('#visual_tactic_induction').should('have.class', 'disabled')
+    clickGoal()
+    goalShouldBe('n = 0 ∨ n ≠ 0')
+    harness(h => h.dragTacticToHyp('induction', 'n'))
+    notProcessing()
+    goalShouldBe('n = 0 ∨ n ≠ 0')
+    harness(h => h.dragTacticToHyp('cases', 'n'))
+    goalShouldBe('0 = 0 ∨ 0 ≠ 0')
+    uses('cases').filter(':visible').should('have.text', 'x0')
+    tacticsTab().should('not.have.class', 'tactics-ready')
+    // The new number is `n1`, in the proof as on the canvas.
+    cy.contains('cases n with n1').should('exist')
+    notProcessing()
+    cy.get('[data-testid="stream-nav-next"]:not(:disabled)', { timeout: LOAD_TIMEOUT }).filter(':visible').first().click()
+    goalShouldBe('S n1 = 0 ∨ S n1 ≠ 0')
+    hypShouldExist('n1')
+    // Its hint is for the whole level, so it is still there.
+    goalHintShouldContain('weaker cousin')
+    // Level 7 allows it twice. `add_left_eq_zero` is ≤ World's to give.
+    openCanvasLevel('InductionJoined', 4)
+    headerShouldNameLevel('7', 'add_right_eq_zero (Miniboss)')
+    goalShouldBe('∀ (a b : ℕ), a + b = 0 → a = 0')
+    trayIsLoaded()
     trayShouldHaveCard('add_left_eq_zero', false)
+    cy.contains('.theorem-tray-panel button', 'Tactics').click()
+    uses('cases').filter(':visible').should('have.text', 'x2')
+    uses('induction').filter(':visible').should('have.text', 'x0')
+    clickGoal()
+    goalShouldBe('∀ (b : ℕ), a + b = 0 → a = 0')
+    clickGoal()
+    goalShouldBe('a + b = 0 → a = 0')
+    harness(h => h.dragTacticToHyp('cases', 'b'))
+    goalShouldBe('a + 0 = 0 → a = 0')
+    uses('cases').filter(':visible').should('have.text', 'x1')
+    tacticsTab().should('have.class', 'tactics-ready')
+    clickGoal()
+    goalShouldBe('a = 0')
+    hypShouldExist('h')
+    // Past the barrier Induction World has the swap button again.
+    harness(h => h.openHypTransform('h'))
+    cy.get('.tr-rule-dock[data-layout-ready="true"]', { timeout: LOAD_TIMEOUT }).should('exist')
+    cy.get('.tr-swap-btn').should('be.visible')
+  })
+
+  it('points out a branch whose goal can\'t be true, in `add_right_eq_zero`', () => {
+    const hint = 'Sometimes proof branch goals are clearly impossible.'
+    openCanvasLevel('InductionJoined', 4)
+    for (const goal of ['∀ (b : ℕ), a + b = 0 → a = 0', 'a + b = 0 → a = 0', 'a = 0']) {
+      clickGoal()
+      goalShouldBe(goal)
+    }
+    cy.contains(hint).should('not.exist')
+    // Splitting `a`: nothing to say about `0 = 0`, but `S(a1) = 0` can't be proved.
+    harness(h => h.dragTacticToHyp('cases', 'a'))
+    goalShouldBe('0 = 0')
+    cy.contains(hint).should('not.exist')
+    notProcessing()
+    cy.get('[data-testid="stream-nav-next"]:not(:disabled)', { timeout: LOAD_TIMEOUT }).filter(':visible').first().click()
+    goalShouldBe('S a1 = 0')
+    goalHintShouldContain(hint)
+    goalHintShouldContain('create a hypothesis')
+    // The hint is for that goal alone: it leaves with it.
+    notProcessing()
+    cy.get('[data-testid="stream-nav-prev"]:not(:disabled)', { timeout: LOAD_TIMEOUT }).filter(':visible').first().click()
+    goalShouldBe('0 = 0')
+    cy.contains(hint).should('not.exist')
+  })
+
+  it('refutes a careless statement of Fermat in the bonus off the last boss', () => {
+    openCanvasLevel('PowerBonus', 1)
+    headerShouldNameLevel('A1', "Refute Fermat's Last Theorem?")
+    goalShouldBe('(∀ (a b c n : ℕ), n > 2 → a ^ n + b ^ n ≠ c ^ n) → False')
+    clickGoal()
+    goalShouldBe('False')
+    hypShouldExist('h')
+    // `0 ^ 3 + 0 ^ 3 = 0 ^ 3`: the numbers the specialization view would be given.
+    for (const [name, source, binder, value] of [
+      ['thm_a', 'h', 'a', '0'], ['thm_b', 'thm_a', 'b', '0'], ['thm_c', 'thm_b', 'c', '0'], ['thm_n', 'thm_c', 'n', '3'],
+    ]) {
+      harness(h => h.runPlayerTactic(`specialize_forall_as ${name} ${source} ${binder} (${value})`))
+      hypShouldExist(name)
+    }
+    cy.get('[data-testid="hyp-card"][data-hyp-name="thm_n"]').should('have.attr', 'data-hyp-type', '3 > 2 → (0 ^ 3 + 0 ^ 3 = 0 ^ 3 → False)')
+    // It proves `False` backwards. `3 > 2` is `¬ 3 ≤ 2`, so a click assumes `3 ≤ 2`,
+    // and that gives a number like any `≤`.
+    dragToGoal('thm_n')
+    goalShouldBe('3 > 2')
+    cy.get('[data-testid="goal-card"]').filter(':visible').first().should('have.class', 'clickable')
+    clickGoal()
+    goalShouldBe('False')
+    cy.get('[data-testid="hyp-card"][data-hyp-name="h1"]').should('have.attr', 'data-hyp-type', '3 ≤ 2')
+    clickHyp('h1')
+    hypShouldExist('c1')
+    cy.get('[data-testid="hyp-card"][data-hyp-type="2 = 3 + c1"]').should('have.attr', 'data-hyp-name', 'h2')
+    // Peel the successors off `2 = 3 + c1` until zero is one.
+    const play = (tactic: string, expected: string) => {
+      harness(h => h.runPlayerTactic(tactic))
+      cy.get(`[data-testid="hyp-card"][data-hyp-type="${expected}"]`, { timeout: LOAD_TIMEOUT }).should('exist')
+    }
+    play('drag_rw_hyp_rhs_at h2 [MyNat.three_eq_succ_two] [1]', '2 = S(2) + c1')
+    play('drag_rw_hyp_rhs h2 [MyNat.succ_add]', '2 = S(2 + c1)')
+    play('drag_rw_hyp_lhs h2 [MyNat.two_eq_succ_one]', 'S(1) = S(2 + c1)')
+    harness(h => h.dragTheoremToHyp('MyNat.succ_inj', 'h2'))
+    hypShouldExist('thm_succ_inj')
+    play('drag_rw_hyp_rhs_at thm_succ_inj [MyNat.two_eq_succ_one] [1]', '1 = S(1) + c1')
+    play('drag_rw_hyp_rhs thm_succ_inj [MyNat.succ_add]', '1 = S(1 + c1)')
+    play('drag_rw_hyp_lhs thm_succ_inj [MyNat.one_eq_succ_zero]', 'S(0) = S(1 + c1)')
+    harness(h => h.dragTheoremToHyp('MyNat.succ_inj', 'thm_succ_inj'))
+    hypShouldExist('thm_succ_inj1')
+    play('drag_rw_hyp_rhs_at thm_succ_inj1 [MyNat.one_eq_succ_zero] [1]', '0 = S(0) + c1')
+    play('drag_rw_hyp_rhs thm_succ_inj1 [MyNat.succ_add]', '0 = S(0 + c1)')
+    harness(h => h.dragTheoremToHyp('MyNat.zero_ne_succ', 'thm_succ_inj1'))
+    hypShouldExist('thm_zero_ne_succ')
+    dragToGoal('thm_zero_ne_succ')
+    // The other branch: the equation, in Rewrite Mode.
+    nextUnsolvedBranch()
+    goalShouldBe('0 ^ 3 + 0 ^ 3 = 0 ^ 3')
+    harness(h => h.openGoalTransform())
+    cy.get('.tr-rule-dock[data-layout-ready="true"]', { timeout: LOAD_TIMEOUT }).should('exist')
+    rewrite('MyNat.three_eq_succ_two', 'left', [1, 2])
+    rewrite('MyNat.zero_pow_succ', 'left', [1])
+    rewrite('MyNat.three_eq_succ_two', 'left', [2, 2])
+    rewrite('MyNat.zero_pow_succ', 'left', [2])
+    rewrite('MyNat.add_zero', 'left')
+    rewrite('MyNat.three_eq_succ_two', 'right', [2])
+    rewrite('MyNat.zero_pow_succ', 'right')
+    relationShouldBe('0 = 0')
+    checkBackToCanvas()
+    shouldBeCompleted()
+  })
+
+  it('opens ≤ World with a witness to build: a hint for the right one, and one for any other', () => {
+    const opening = 'propose some ‘witness’'
+    const wrong = 'We won’t be able to solve the goal with that witness.'
+    const right = 'Now we can just finish the level as usual.'
     openCanvasLevel('LessOrEqual', 1)
+    headerShouldNameLevel('0', '∃')
+    goalShouldBe('∃ n, n + n = 0')
+    goalHintShouldContain(opening)
+    // A witness that doesn't work: no hint is written for that goal, so the one for
+    // every other state shows.
+    harness(h => h.runPlayerTactic('refine Exists.intro (1) ?_'))
+    goalShouldBe('1 + 1 = 0')
+    goalHintShouldContain(wrong)
+    goalHintShouldContain('Use the undo button')
+    cy.contains(opening).should('not.exist')
+    notProcessing()
+    cy.get('button[aria-label="Undo"]').filter(':visible').first().click()
+    goalShouldBe('∃ n, n + n = 0')
+    goalHintShouldContain(opening)
+    cy.contains(wrong).should('not.exist')
+    // The one that does.
+    harness(h => h.runPlayerTactic('refine Exists.intro (0) ?_'))
+    goalShouldBe('0 + 0 = 0')
+    goalHintShouldContain(right)
+    cy.contains(wrong).should('not.exist')
+    harness(h => h.openGoalTransform())
+    cy.get('.tr-rule-dock[data-layout-ready="true"]', { timeout: LOAD_TIMEOUT }).should('exist')
+    rewrite('MyNat.add_zero', 'left')
+    relationShouldBe('0 = 0')
+    checkBackToCanvas()
+    shouldBeCompleted()
+    cy.contains(wrong).should('not.exist')
+  })
+
+  it('defines ≤ as `∃ c, y = x + c`, on every card, and names the numbers it gives c1, c2', () => {
+    openCanvasLevel('LessOrEqual', 2)
     headerShouldNameLevel('1', 'le_refl')
+    goalShouldBe('∀ (x : ℕ), x ≤ x')
+    goalHintShouldContain('We define')
+    goalHintShouldContain('∃ c, y = x + c')
+    clickGoal()
+    goalShouldBe('x ≤ x')
+    cy.get('[data-testid="goal-card"]').filter(':visible').first().find('.statement-atomic-form')
+      .should('have.text', '∃ c, x = x + c')
+    // `add_left_eq_zero` is given here; Induction World's `add_right_eq_zero` isn't
+    // around yet, since this part of ≤ World doesn't wait for it.
     cy.get('[data-testid="theorem-tray-card"]', { timeout: LOAD_TIMEOUT }).should('have.length.greaterThan', 0)
     trayShouldHaveCard('add_left_eq_zero', true)
-    trayShouldHaveCard('add_right_eq_zero', true)
+    trayShouldHaveCard('add_right_eq_zero', false)
+
+    // Level 4's hint points at the hypothesis to click.
+    openCanvasLevel('LessOrEqual', 5)
+    headerShouldNameLevel('4', '∃ Hypotheses')
+    hintShouldContain('hypothesis to create a witness')
+
+    openCanvasLevel('LessOrEqual', 6)
+    headerShouldNameLevel('5', 'Transitivity')
+    goalShouldBe('x ≤ z')
+    cy.contains('there-exists hypotheses').should('not.exist')
+    cy.get('[data-testid="goal-card"]').filter(':visible').first().find('.statement-atomic-form')
+      .should('have.text', '∃ c, z = x + c')
+    // A theorem's card writes the definition out the same way.
+    cy.get('[data-testid="theorem-tray-card"]', { timeout: LOAD_TIMEOUT }).should('have.length.greaterThan', 0)
+    trayShouldHaveCard('le_refl', true)
+    cy.get('[data-testid="theorem-tray-card"][data-theorem-label="le_refl"] .statement-atomic-form')
+      .should('have.text', '∃ c, x = x + c')
+    // The numbers the two hypotheses give are `c1` and `c2`, never plain `c`.
+    clickHyp('hxy')
+    hypShouldExist('c1')
+    cy.get('[data-testid="hyp-card"][data-hyp-type="y = x + c1"]').should('exist')
+    clickHyp('hyz')
+    hypShouldExist('c2')
+    cy.get('[data-testid="hyp-card"][data-hyp-type="z = y + c2"]').should('exist')
+    cy.get('[data-testid="hyp-card"][data-hyp-name="c"]').should('not.exist')
+  })
+
+  it('gives a proposition derived in the level a colour of its own, the world\'s fifth', () => {
+    // The ≠ World, `riverside`: theorem cards are its third colour, a pale blue-grey,
+    // and what the player derives is its fifth, a violet.
+    openCanvasLevel('Neq', 7)
+    headerShouldNameLevel('6', '≠')
+    clickGoal()
+    goalShouldBe('∀ (y : ℕ), S x = S y ∧ x ≠ y → False')
+    clickGoal()
+    goalShouldBe('S x = S y ∧ x ≠ y → False')
+    clickGoal()
+    goalShouldBe('False')
+    hypShouldExist('h')
+    clickHyp('h')
+    hypShouldExist('left')
+    harness(h => h.dragTheoremToHyp('MyNat.succ_inj', 'left'))
+    hypShouldExist('thm_succ_inj')
+    const borderOf = (selector: string) => cy.get(selector).filter(':visible').first()
+      .then($card => getComputedStyle($card[0]!).borderTopColor)
+    borderOf('[data-testid="hyp-card"][data-hyp-name="thm_succ_inj"]').should('equal', 'rgba(199, 155, 255, 0.55)')
+    borderOf('[data-testid="theorem-tray-card"]').should('equal', 'rgba(213, 220, 234, 0.4)')
+    // A hypothesis of the level's own stays grey.
+    borderOf('[data-testid="hyp-card"][data-hyp-name="left"]').should('not.contain', '199, 155, 255')
+  })
+
+  it('makes the theorem cards of the lower menu one height, whatever they hold', { viewportWidth: 1280, viewportHeight: 720 }, () => {
+    // Late in the game the menu holds cards of every kind: a name on a line of its own,
+    // a definition under a `≠` or a `≤`, a `∀` line.
+    openCanvasLevel('AdvMultiplication', 10)
+    cy.get('[data-testid="theorem-tray-card"]', { timeout: LOAD_TIMEOUT }).should('have.length.greaterThan', 0)
+    const heights = new Set<number>()
+    let cards = 0
+    const measure = () => cy.get('[data-testid="theorem-tray-card"]').filter(':visible').each($card => {
+      const card = $card[0]!
+      const box = card.getBoundingClientRect()
+      heights.add(Math.round(box.height))
+      cards += 1
+      // Nothing is cut off: every line is inside the card.
+      for (const line of Array.from(card.children)) {
+        const inner = line.getBoundingClientRect()
+        expect(inner.top, `${card.getAttribute('data-theorem-label')}: top`).to.be.at.least(box.top)
+        expect(inner.bottom, `${card.getAttribute('data-theorem-label')}: bottom`).to.be.at.most(box.bottom)
+      }
+    })
+    const turnPages = (remaining: number): void => {
+      measure()
+      cy.get('.theorem-tray-panel .tr-nav-btn[aria-label="Next"]').then($next => {
+        if ($next.is(':disabled') || remaining <= 0) return
+        const before = Cypress.$('.theorem-tray-panel .tr-page-indicator').text()
+        cy.wrap($next).click()
+        cy.get('.theorem-tray-panel .tr-page-indicator').should('not.have.text', before)
+        // The page slides in, and its buttons are back once it has.
+        cy.wait(400)
+        turnPages(remaining - 1)
+      })
+    }
+    turnPages(40)
+    cy.then(() => {
+      expect(cards, 'cards looked at').to.be.at.least(30)
+      expect([...heights], 'card heights').to.have.length(1)
+    })
+  })
+
+  it('plays Logic World in its own colours', () => {
+    openCanvasLevel('Logic', 1)
+    headerShouldNameLevel('0', 'Double Elimination is Equivalent To LEM')
+    goalShouldBe('(∀ (P : Prop), P ∨ ¬P) ↔ ∀ (P : Prop), ¬¬P → P')
+    cy.get('.app').should('have.attr', 'data-world-scheme', 'frost')
+    cy.document().its('documentElement').should(html => {
+      expect(html.style.backgroundColor).to.equal('rgb(62, 68, 76)')
+    })
+    // The goal separates into its two directions.
+    clickGoal()
+    goalShouldBe('(∀ (P : Prop), P ∨ ¬P) → ∀ (P : Prop), ¬¬P → P')
   })
 
   it('plays the bonus off Proposition World level 9 on the canvas', () => {
@@ -2165,6 +2778,8 @@ describe('Natural Numbers Video Game', () => {
         cy.get('body').trigger('pointerup', at(x + dx, y + dy))
       })
     }
+    // A variable is picked up like any card: the grab cursor, not the up-and-down arrows.
+    cy.get(`${variables}[data-hyp-name="A"]`).should('have.css', 'cursor', 'grab')
     drag('A', 500, 95, () => {
       cy.get('.hyp-overlay-card').should('be.visible').then($dragged => {
         const dragged = $dragged[0]!.getBoundingClientRect()
@@ -2197,6 +2812,8 @@ describe('Natural Numbers Video Game', () => {
       expect(reset!.right, 'Reset, then Undo').to.be.at.most(undo!.left)
       const column = Cypress.$('[data-testid="type-column"]')[0]!.getBoundingClientRect()
       expect(tab!.top, 'under the column').to.be.at.least(column.bottom - 1)
+      // Tall enough to click easily: nearly twice the buttons beside it.
+      expect(tab!.height, 'a tall tab').to.be.at.least(reset!.height * 1.9)
     })
     // It closes the proof sidebar, which starts open on a desktop, and opens it again;
     // the controls stay beside the sidebar's edge either way.
@@ -2280,9 +2897,7 @@ describe('Natural Numbers Video Game', () => {
     rewrite('MyNat.add_one_eq_succ', 'left')
     rewrite('MyNat.two_eq_succ_one', 'right')
     relationShouldBe('S(1) = S(1)')
-    check()
-    cy.get('.tr-back-btn').click()
-    cy.get('.tr-transformation-overlay').should('not.exist')
+    checkBackToCanvas()
     shouldBeCompleted()
     const steps = (win: Cypress.AUTWindow) => playLog(win).length
     let finishedSteps = 0
@@ -2317,8 +2932,9 @@ describe('Natural Numbers Video Game', () => {
     relationShouldBe('S(1) = S(1)')
     cy.get('.tr-back-btn').click()
     cy.window().then(win => expect(steps(win), 'no move was made').to.equal(finishedSteps))
-    // The level's hint is still up.
-    goalHintShouldContain('double-clicking the goal')
+    // The level's hint sent the player to Rewriting Mode, where the proof was finished, so
+    // it has been gone since.
+    cy.contains('double-clicking the goal').should('not.exist')
   })
 
   it('plays Fast Reversing, bonus A2: a right-click swaps the direction, a swipe sets it', () => {
@@ -2441,13 +3057,17 @@ describe('Natural Numbers Video Game', () => {
   it('pages Rewrite Mode rules without overflow on a large window', () => {
     cy.viewport(2560, 1440)
     openCanvasLevel('Multiplication', 6)
+    clickGoal()
+    goalShouldBe('2 * m = m + m')
     harness(h => h.openGoalTransform())
     cy.get('.tr-transformation-overlay .tr-rule-dock[data-layout-ready="true"]', { timeout: LOAD_TIMEOUT }).should('exist')
     // The interface is scaled up here, and the gap between the cards with it.
     const pageHoldsItsCards = () => {
       cy.get('.tr-transformation-overlay .tr-rule-page').should($page => {
         const page = $page[0]!.getBoundingClientRect()
-        const cards = [...$page.find('.tr-rule-card')].map(element => element.getBoundingClientRect())
+        // (A card of another page can be in the document for a moment, out of sight,
+        // while the cards are measured.)
+        const cards = [...$page.find('.tr-rule-card:not(.tr-rule-card-off-page)')].map(element => element.getBoundingClientRect())
         expect(cards.length, 'cards on the page').to.be.greaterThan(0)
         expect(Math.min(...cards.map(box => box.left)), 'first card').to.be.at.least(page.left - 1)
         expect(Math.max(...cards.map(box => box.right)), 'last card').to.be.at.most(page.right + 1)
@@ -2465,6 +3085,50 @@ describe('Natural Numbers Video Game', () => {
     }
     cy.get('.tr-transformation-overlay .tr-page-indicator').should('contain.text', 'Page 1 of')
     walk(8)
+    cy.viewport(1000, 660)
+  })
+
+  it('pages Rewrite Mode rules without waiting for a font that never arrives', () => {
+    cy.viewport(1920, 1080)
+    cy.visit(level('InductionJoined', 1), {
+      onBeforeLoad(win) {
+        win.localStorage.setItem('telemetryConsent', 'refused')
+        // A font that stays loading: the dock used to wait for it with every rule on
+        // one row, the first and the last cut off by the edges of the window.
+        Object.defineProperty(win.document.fonts, 'status', { get: () => 'loading' })
+        Object.defineProperty(win.document.fonts, 'ready', { get: () => new Promise(() => {}) })
+      },
+    })
+    cy.get('[data-testid="goal-card"]', { timeout: LOAD_TIMEOUT }).should('be.visible')
+    for (const goal of ['∀ (b n : ℕ), a + n = b + n → a = b', '∀ (n : ℕ), a + n = b + n → a = b', 'a + n = b + n → a = b', 'a = b']) {
+      clickGoal()
+      goalShouldBe(goal)
+    }
+    harness(h => h.openGoalTransform())
+    cy.get('.tr-transformation-overlay .tr-rule-dock[data-layout-ready="true"]', { timeout: LOAD_TIMEOUT }).should('exist')
+    const pageHoldsItsCards = () => {
+      cy.get('.tr-transformation-overlay .tr-rule-page').should($page => {
+        const page = $page[0]!.getBoundingClientRect()
+        const cards = [...$page.find('.tr-rule-card:not(.tr-rule-card-off-page)')].map(element => element.getBoundingClientRect())
+        expect(cards.length, 'cards on the page').to.be.greaterThan(0)
+        expect(Math.min(...cards.map(box => box.left)), 'first card').to.be.at.least(page.left - 1)
+        expect(Math.max(...cards.map(box => box.right)), 'last card').to.be.at.most(page.right + 1)
+      })
+    }
+    pageHoldsItsCards()
+    cy.get('.tr-transformation-overlay .tr-page-indicator').should('contain.text', 'of 2')
+    // Every tab, and the other direction: the page fits at once, and stays fitting.
+    cy.get('.tr-transformation-overlay .tr-tab-btn').each($tab => {
+      cy.wrap($tab).click()
+      pageHoldsItsCards()
+      cy.wait(500)
+      pageHoldsItsCards()
+    })
+    cy.get('.tr-transformation-overlay .tr-tab-btn').first().click()
+    cy.get('.tr-transformation-overlay .tr-rule-dock').rightclick()
+    pageHoldsItsCards()
+    cy.wait(500)
+    pageHoldsItsCards()
     cy.viewport(1000, 660)
   })
 

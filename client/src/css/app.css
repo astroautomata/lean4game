@@ -154,6 +154,12 @@ em {
   background: var(--classic-surface);
 }
 
+/* A game with the neutral palette has no light scheme (see visual/palette.css),
+   whatever its "Visual Style" setting. */
+.app[data-visual-style] .theme-mode-btn {
+  display: none;
+}
+
 .theme-mode-btn.active {
   color: #f59e0b;
 }

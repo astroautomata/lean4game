@@ -6,6 +6,7 @@ import { colorizeFormula, hasIntegerNotation } from './colorizeFormula'
 import { hasIffNotation, renderFormulaWithIffArrow, type IffDirection } from './iffArrow'
 import { StatementCardLine } from './StatementCardLine'
 import { AtomicForm } from './AtomicForm'
+import { selectAtomicReductionForm } from './existsDisplay'
 
 function PropositionTheoremContent({
   theorem,
@@ -50,15 +51,17 @@ function theoremCardLayoutClass(theorem: PropositionTheorem): string {
   const reservedLines = (theorem.forallFooter ? 1 : 0) + (theorem.reductionForms?.length ? 1 : 0)
   const availablePropositionLines = Math.max(0, 2 - reservedLines)
   const propositionLines = Math.ceil(theorem.proposition.length / lineCapacity)
-  if (
-    labelAndPropositionLength > lineCapacity
+  const breakAfterLabel = labelAndPropositionLength > lineCapacity
     && theorem.label.length <= lineCapacity
     && propositionLines <= availablePropositionLines
-  ) {
-    return ' theorem-card-break-after-label'
-  }
+  // How many lines the card holds: the lower menu's cards are all one height, so one
+  // with more lines sets them smaller (visual.css).
+  const definitionLine = selectAtomicReductionForm(theorem.proposition, theorem.reductionForms, []) !== null
+  const lines = 1 + (breakAfterLabel ? 1 : 0) + (definitionLine ? 1 : 0) + (theorem.forallFooter ? 1 : 0)
+  const linesClass = lines >= 3 ? ` theorem-card-lines-${Math.min(lines, 4)}` : ''
+  if (breakAfterLabel) return ` theorem-card-break-after-label${linesClass}`
   const contentLength = `${theorem.label} ${theorem.proposition} ${theorem.forallFooter ?? ''}`.length
-  return contentLength > 54 ? ' theorem-card-compact' : contentLength > 38 ? ' theorem-card-snug' : ''
+  return (contentLength > 54 ? ' theorem-card-compact' : contentLength > 38 ? ' theorem-card-snug' : '') + linesClass
 }
 
 function useClickWithoutDrag(isDragging: boolean, onClick?: () => void) {

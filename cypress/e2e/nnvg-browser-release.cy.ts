@@ -130,23 +130,36 @@ describe('The Natural Numbers Video Game in the browser release', () => {
     notProcessing()
     cy.get('[data-testid^="stream-nav-"].toward-incomplete:not(:disabled)', { timeout: LOAD_TIMEOUT })
       .filter(':visible').first().click()
-    goalShouldBe('0 + S d = S d')
+    // The game names the number an induction brings in after the one it split.
+    goalShouldBe('0 + S n1 = S n1')
     enterRewriteMode()
     clickRule('add_succ')
-    relationShouldBe('S(0 + d) = S(d)')
-    clickRule('hd')
-    relationShouldBe('S(d) = S(d)')
-    check()
+    relationShouldBe('S(0 + n1) = S(n1)')
+    clickRule('hn1')
+    relationShouldBe('S(n1) = S(n1)')
+    // On a canvas level the check mark closes the goal and Rewrite Mode with it.
+    notProcessing()
+    cy.get('[data-testid="rewrite-check"]', { timeout: LOAD_TIMEOUT }).should('be.visible').click()
+    cy.get('.tr-transformation-overlay', { timeout: LOAD_TIMEOUT }).should('not.exist')
     cy.window({ timeout: LOAD_TIMEOUT }).should(win => {
       expect((win as HarnessWindow).__visualTestHarness!.getProofAudit().completed).to.equal(true)
     })
   })
 
   it('splits a number with a player’s cases', () => {
-    visit(level('AdvAddition', 5))
+    // Induction World's level 7, `add_right_eq_zero`, which allows `cases` twice.
+    visit(level('InductionJoined', 4))
     cy.get('[data-testid="goal-card"]', { timeout: LOAD_TIMEOUT }).should('be.visible')
+    goalShouldBe('∀ (a b : ℕ), a + b = 0 → a = 0')
+    harness(h => h.clickGoal())
+    goalShouldBe('∀ (b : ℕ), a + b = 0 → a = 0')
+    harness(h => h.clickGoal())
     goalShouldBe('a + b = 0 → a = 0')
     harness(h => h.dragTacticToHyp('cases', 'b'))
     goalShouldBe('a + 0 = 0 → a = 0')
+    // The other case has the new number, named after `b`.
+    notProcessing()
+    cy.get('[data-testid="stream-nav-next"]:not(:disabled)', { timeout: LOAD_TIMEOUT }).filter(':visible').first().click()
+    goalShouldBe('a + S b1 = 0 → a = 0')
   })
 })

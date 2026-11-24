@@ -50,12 +50,16 @@ def saveGameData (allItemsByType : HashMap InventoryType (HashSet Name))
   for (worldId, world) in game.worlds.nodes.toArray do
     for (levelId, level) in world.levels.toArray do
       -- A world-wide `VisualHideSwapSides`, `VisualNoRewriteTabs` or `VisualTacticUses`
-      -- reaches the client through its levels; a level's own count for a tactic wins.
+      -- reaches the client through its levels, as does a game-wide `VisualTacticUses`.
+      -- For a tactic's count the level's own wins, then its world's, then the game's.
+      let without (limits nearer : Array VisualTacticUses) :=
+        limits.filter fun (limit : VisualTacticUses) =>
+          !nearer.any fun (own : VisualTacticUses) => own.tactic == limit.tactic
+      let levelAndWorld := level.visualTacticUses ++ without world.visualTacticUses level.visualTacticUses
       let info := { level.toInfo env with
         visualHideSwapSides := level.visualHideSwapSides || world.visualHideSwapSides
         visualNoRewriteTabs := level.visualNoRewriteTabs || world.visualNoRewriteTabs
-        visualTacticUses := level.visualTacticUses ++ world.visualTacticUses.filter fun (limit : VisualTacticUses) =>
-          !level.visualTacticUses.any fun (own : VisualTacticUses) => own.tactic == limit.tactic }
+        visualTacticUses := levelAndWorld ++ without game.visualTacticUses levelAndWorld }
       IO.FS.writeFile (path / levelFileName worldId levelId) (toString (toJson info))
 
   IO.FS.writeFile (path / gameFileName) (toString (getGameJson game))

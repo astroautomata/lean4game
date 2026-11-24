@@ -179,6 +179,17 @@ private def freshUserName (base : String) : TacticM Name := withMainContext do
     candidate := Name.mkSimple s!"{base}{idx}"
   pure candidate
 
+/-- `base1`, or the first of `base2`, `base3`, … that is free: the name of a witness in
+a game with `VisualNumberedWitnesses`. -/
+private def freshNumberedUserName (base : String) : TacticM Name := withMainContext do
+  let lctx ← getLCtx
+  let mut idx := 1
+  let mut candidate := Name.mkSimple s!"{base}{idx}"
+  while lctx.findFromUserName? candidate |>.isSome do
+    idx := idx + 1
+    candidate := Name.mkSimple s!"{base}{idx}"
+  pure candidate
+
 private def introPropositionWithoutCleanup (name : Name) : TacticM Unit :=
   liftMetaTactic fun mvarId => do
     let (_, nextGoal) ← mvarId.intro name
@@ -1041,7 +1052,14 @@ syntax (name := click_prop) "click_prop" ident : tactic
       let binderName := match pred with
         | .lam n _ _ _ => n
         | _ => `w
-      let varIdent  : Ident := mkIdent (← freshUserName binderName.toString)
+      -- A hypothesis like `a ≤ b` doesn't show its bound variable, and often several
+      -- are taken apart in one proof: where the game asks for it
+      -- (`VisualNumberedWitnesses`), their witnesses are `c1`, `c2`, …, never plain `c`.
+      let behindDefinition := !(← instantiateMVars hDecl.type).consumeMData.isAppOf ``Exists
+      let numbered := behindDefinition &&
+        (← getEnv).contains `GameServer.visualNumberedWitnesses
+      let varIdent  : Ident := mkIdent (← if numbered then freshNumberedUserName binderName.toString
+        else freshUserName binderName.toString)
       let condIdent : Ident := mkIdent (← freshUserName "h")
       evalTactic (← `(tactic| have ⟨$varIdent, $condIdent⟩ := $h))
       evalTactic (← `(tactic| clear $h))

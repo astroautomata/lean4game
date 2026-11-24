@@ -62,10 +62,12 @@ export interface PathMapSegment {
 }
 
 /** A world's title. `x` is its middle, or the end named by `anchor` when it sits
- * beside its path. */
+ * beside its path. A long title is set on two lines: `y` is the middle of the last
+ * one, and the first is `PATH_MAP_LABEL_LINE_HEIGHT` above it. */
 export interface PathMapLabel {
   world: string
   text: string
+  lines: string[]
   x: number
   y: number
   color: string
@@ -109,6 +111,16 @@ const LABEL_GAP = 22
 const PATH_HALF_WIDTH = 8
 /** Half the height of a title's text. */
 const LABEL_HALF_HEIGHT = 8
+/** Half the height a title is given when it is kept clear of paths: its box as drawn,
+ * with the room above and below its letters. */
+const LABEL_CLEAR_HALF_HEIGHT = 12
+/** Space between a title beside the stretch of path into its world's first level and
+ * that level. */
+const LABEL_LEVEL_GAP = 14
+/** A title longer than this is set on two lines, so that it doesn't widen the map. */
+const LABEL_WRAP_LENGTH = 30
+/** Distance between the two lines of a long title. */
+export const PATH_MAP_LABEL_LINE_HEIGHT = 20
 /** Rough label width per character, for the bounds. */
 const LABEL_CHAR_WIDTH = 8.5
 /** A generous label width per character, for keeping titles clear of paths. */
@@ -117,8 +129,24 @@ const LABEL_CLEAR_CHAR_WIDTH = 9.2
 const LABEL_SIDE_GAP = 12
 /** Space a title keeps from paths, levels and other titles. */
 const LABEL_CLEARANCE = 5
+/** How far below its source's last level, in rows, a path into a bonus world from a
+ * world it doesn't branch off turns away: the heights it tries, in order. */
+const INTO_BONUS_LEAVE_ROWS = [0.5, 0.35, 0.65]
 /** Half the length of a bridge over a crossed path. */
 const BRIDGE_HALF_LENGTH = PATH_HALF_WIDTH + 6
+/** How much lower, in rows, a path leaves its source for a lane to the side when the
+ * usual height would run it into the turn of another path. */
+const LATE_LEAVE_ROWS = 0.45
+
+/** The lines a title is set on: one, or for a long title two of about the same length. */
+export function pathMapLabelLines(text: string): string[] {
+  if (text.length <= LABEL_WRAP_LENGTH) return [text]
+  const breaks = [...text.matchAll(/ /gu)].map(match => match.index!)
+  if (breaks.length === 0) return [text]
+  const middle = (text.length - 1) / 2
+  const at = breaks.reduce((best, index) => (Math.abs(index - middle) < Math.abs(best - middle) ? index : best))
+  return [text.slice(0, at), text.slice(at + 1)]
+}
 
 function visibleLevels(input: PathMapInput, world: string): number[] {
   const skipped = new Set(input.skippedLevels?.[world] ?? [])
@@ -173,7 +201,14 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
   }
   const mainWorlds = worldIds.filter(world => !bonusOf(world))
   const mainSet = new Set(mainWorlds)
-  const mainEdges = dedupeEdges(input.edges).filter(([source, target]) =>
+  // A world that carries on another's path is joined to it, also where the game
+  // lists no edge between the two because a way round implies it (Induction World
+  // waits for the ≠ World, which itself waits for Induction World's first part).
+  const continuations = mainWorlds.flatMap(world => {
+    const source = continuesOf(world)
+    return source ? [[source, world]] : []
+  })
+  const mainEdges = dedupeEdges([...input.edges, ...continuations]).filter(([source, target]) =>
     mainSet.has(source) && mainSet.has(target))
   const predecessors: Record<string, string[]> = Object.fromEntries(mainWorlds.map(world => [world, []]))
   for (const [source, target] of mainEdges) predecessors[target]!.push(source)
@@ -195,6 +230,9 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     const root = bonusRoot(source)
     if (root !== target) onwardRoots[target]!.push(root)
   }
+  // A bonus world can also wait for a main world besides the one it branches off.
+  const intoBonusEdges = dedupeEdges(input.edges).filter(([source, target]) =>
+    mainSet.has(source) && bonusOf(target) !== undefined && bonusOf(target)!.world !== source)
   const isBottom = (world: string) => input.worlds[world]?.bottom === true
 
   // Dependency order; a cycle (which MakeGame reports) falls back to name order.
@@ -243,6 +281,15 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     const anchor = bonusOf(world)!
     const key = `${anchor.world}:${anchorLevel(levelsOf[anchor.world]!, anchor.level)}`
     ;(branchesAt[key] ??= []).push(world)
+  }
+  // Branches off one level that each lead on to a later world: the longest row comes
+  // first, so that every one's path onwards drops clear of the rows below it.
+  for (const branches of Object.values(branchesAt)) {
+    const leadsOn = (world: string) => onwardEdges.some(([source]) => source === world)
+    if (branches.filter(leadsOn).length < 2) continue
+    const listed = [...branches]
+    branches.sort((a, b) =>
+      (levelsOf[b]!.length - levelsOf[a]!.length) || (listed.indexOf(a) - listed.indexOf(b)))
   }
 
   // Rows: a world's levels go down one row at a time. The bonuses that branch
@@ -442,8 +489,20 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
       source: { world: source, level: fromLevel },
     })
   }
-  for (const [source, target] of mainEdges) {
-    if (row[source] === undefined || row[target] === undefined) continue
+  // The upright and level runs of the edges drawn so far, which a path that picks a
+  // lane of its own keeps off: two paths down one column would read as one.
+  const routed: PathMapPoint[][] = []
+  const runsAlong = (a: PathMapPoint, b: PathMapPoint) => routed.some(points =>
+    points.some((c, index) => {
+      const d = points[index + 1]
+      if (!d) return false
+      const upright = a.x === b.x
+      if (upright ? (c.x !== d.x || c.x !== a.x) : (c.y !== d.y || Math.abs(c.y - a.y) >= 2 * PATH_HALF_WIDTH)) return false
+      const [from, to] = upright ? [Math.min(a.y, b.y), Math.max(a.y, b.y)] : [Math.min(a.x, b.x), Math.max(a.x, b.x)]
+      const [otherFrom, otherTo] = upright ? [Math.min(c.y, d.y), Math.max(c.y, d.y)] : [Math.min(c.x, d.x), Math.max(c.x, d.x)]
+      return Math.max(from, otherFrom) <= Math.min(to, otherTo) + PATH_MAP_CORNER_RADIUS
+    }))
+  const routeEdge = (source: string, target: string, lane: boolean): boolean => {
     const fromLevel = levelsOf[source]!.at(-1)!
     const toLevel = levelsOf[target]![0]!
     const start = position(source, fromLevel)
@@ -454,35 +513,55 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     // A path to a section that belongs to no world is that section's grey as
     // soon as it has left its source, however far it still has to go.
     const earlyChangeY = isShared(target) && !isShared(source) ? leaveY - PATH_MAP_CORNER_RADIUS : Infinity
+    const push = (out: PathMapPoint[], into: PathMapPoint[]) => {
+      pushEdge(source, target, fromLevel, out, into)
+      routed.push([...out, ...into.slice(1)])
+      return true
+    }
     if (start.x === end.x) {
+      if (lane) return false
       const change = { x: start.x, y: Math.min((start.y + end.y) / 2, earlyChangeY) }
-      pushEdge(source, target, fromLevel, [start, change], [change, end])
-      continue
+      return push([start, change], [change, end])
     }
     const turnY = end.y - TURN_ROWS_ABOVE * rowHeight
-    if (columnBlocked(start.x, start.y, turnY) && leaveY < turnY - PATH_MAP_CORNER_RADIUS) {
+    const blocked = columnBlocked(start.x, start.y, turnY) && leaveY < turnY - PATH_MAP_CORNER_RADIUS
+    if (blocked !== lane) return false
+    if (lane) {
       // Another world carries on below the source, so the path can't stay in
       // its column. It leaves to the side at once and runs down a clear column:
       // the target's own if it can, or else the nearest one on the way there.
+      // If the turn of another path is in the way there, it leaves a little lower.
       const direction = Math.sign(end.x - start.x)
       const lanes = [end.x]
       for (let x = start.x + direction * columnWidth; (end.x - x) * direction > 0; x += direction * columnWidth) lanes.push(x)
-      const laneX = lanes.find(x => !columnBlocked(x, leaveY, x === end.x ? end.y : turnY))
-      if (laneX !== undefined) {
-        const change = { x: start.x, y: leaveY - PATH_MAP_CORNER_RADIUS }
-        const into = [change, { x: start.x, y: leaveY }, { x: laneX, y: leaveY }]
-        if (laneX !== end.x) {
-          into.push({ x: laneX, y: turnY }, { x: end.x, y: turnY })
-          bendY[target] = Math.min(bendY[target] ?? Infinity, turnY)
+      for (const laneX of lanes) {
+        for (const leave of [leaveY, leaveY + LATE_LEAVE_ROWS * rowHeight]) {
+          const laneEndY = laneX === end.x ? end.y : turnY
+          if (leave >= laneEndY - PATH_MAP_CORNER_RADIUS) continue
+          if (columnBlocked(laneX, leave, laneEndY)) continue
+          if (runsAlong({ x: laneX, y: leave }, { x: laneX, y: laneEndY }) ||
+              runsAlong({ x: start.x, y: leave }, { x: laneX, y: leave })) continue
+          const change = { x: start.x, y: leave - PATH_MAP_CORNER_RADIUS }
+          const into = [change, { x: start.x, y: leave }, { x: laneX, y: leave }]
+          if (laneX !== end.x) {
+            into.push({ x: laneX, y: turnY }, { x: end.x, y: turnY })
+            bendY[target] = Math.min(bendY[target] ?? Infinity, turnY)
+          }
+          return push([start, change], [...into, end])
         }
-        pushEdge(source, target, fromLevel, [start, change], [...into, end])
-        continue
       }
     }
     bendY[target] = Math.min(bendY[target] ?? Infinity, turnY)
     const change = { x: start.x, y: Math.min(turnY - PATH_MAP_CORNER_RADIUS, earlyChangeY) }
-    pushEdge(source, target, fromLevel, [start, change],
-      [change, { x: start.x, y: turnY }, { x: end.x, y: turnY }, end])
+    return push([start, change], [change, { x: start.x, y: turnY }, { x: end.x, y: turnY }, end])
+  }
+  // The paths that stay in their source's column first, then those that need a lane
+  // of their own, from the top of the map down.
+  const drawnEdges = mainEdges.filter(([source, target]) => row[source] !== undefined && row[target] !== undefined)
+  const needLane = drawnEdges.filter(([source, target]) => !routeEdge(source, target, false))
+  const leaveRow = ([source]: [string, string]) => endRowOf(source)
+  for (const [source, target] of [...needLane].sort((a, b) => leaveRow(a) - leaveRow(b))) {
+    routeEdge(source, target, true)
   }
   // A bonus world's path onwards runs down the bonus world's column, if it has
   // one, or straight down from its last level, and turns in above the target.
@@ -504,6 +583,29 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     }
     bendY[target] = Math.min(bendY[target] ?? Infinity, turnY)
     pushEdge(source, target, fromLevel, out, [change, { x: laneX, y: turnY }, { x: end.x, y: turnY }, end])
+  }
+  // A path into a bonus world from a world it doesn't branch off leaves that world's
+  // last level half a row down, between the rows of levels, crosses to above the bonus
+  // world's first level and drops onto it. It is drawn where the bonus lies lower and
+  // nothing stands in that last stretch; the height it crosses at keeps off the level
+  // runs of other paths.
+  for (const [source, target] of intoBonusEdges) {
+    if (row[source] === undefined || row[target] === undefined) continue
+    const fromLevel = levelsOf[source]!.at(-1)!
+    const start = position(source, fromLevel)
+    const end = position(target, levelsOf[target]![0]!)
+    if (end.x === start.x) continue
+    for (const rows of INTO_BONUS_LEAVE_ROWS) {
+      const leaveY = start.y + rows * rowHeight
+      if (leaveY >= end.y - PATH_MAP_CORNER_RADIUS || columnBlocked(end.x, leaveY, end.y)) continue
+      if (runsAlong({ x: start.x, y: leaveY }, { x: end.x, y: leaveY }) ||
+          runsAlong({ x: end.x, y: leaveY }, { x: end.x, y: end.y })) continue
+      const change = { x: start.x, y: leaveY - PATH_MAP_CORNER_RADIUS }
+      const into = [change, { x: start.x, y: leaveY }, { x: end.x, y: leaveY }, end]
+      pushEdge(source, target, fromLevel, [start, change], into)
+      routed.push([start, ...into.slice(1)])
+      break
+    }
   }
   for (const world of placed) {
     const anchor = bonusOf(world)
@@ -572,10 +674,12 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
   // into its world instead: on the outer side if that is clear, to the left
   // from the centre, or else on the inner side.
   interface Box { x1: number; x2: number; y1: number; y2: number }
-  const labelBox = (label: Pick<PathMapLabel, 'text' | 'x' | 'y' | 'anchor'>): Box => {
-    const width = label.text.length * LABEL_CLEAR_CHAR_WIDTH
+  const widestLine = (lines: string[]) => Math.max(...lines.map(line => line.length))
+  const labelBox = (label: Pick<PathMapLabel, 'lines' | 'x' | 'y' | 'anchor'>): Box => {
+    const width = widestLine(label.lines) * LABEL_CLEAR_CHAR_WIDTH
     const x1 = label.anchor === 'middle' ? label.x - width / 2 : label.anchor === 'end' ? label.x - width : label.x
-    return { x1, x2: x1 + width, y1: label.y - LABEL_HALF_HEIGHT, y2: label.y + LABEL_HALF_HEIGHT }
+    const top = label.y - (label.lines.length - 1) * PATH_MAP_LABEL_LINE_HEIGHT
+    return { x1, x2: x1 + width, y1: top - LABEL_CLEAR_HALF_HEIGHT, y2: label.y + LABEL_CLEAR_HALF_HEIGHT }
   }
   const boxesMeet = (a: Box, b: Box, clearance: number) =>
     a.x1 < b.x2 + clearance && b.x1 < a.x2 + clearance && a.y1 < b.y2 + clearance && b.y1 < a.y2 + clearance
@@ -614,22 +718,28 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     if (!own || own.shared || bonusOf(world) || continuesOf(world)) continue
     const first = position(world, levelsOf[world]![0]!)
     const text = own.title || world
+    const lines = pathMapLabelLines(text)
     const above = (top: number) => top - PATH_HALF_WIDTH - LABEL_GAP - LABEL_HALF_HEIGHT
     const y = above(bendY[world] ?? first.y - PATH_MAP_NODE_RADIUS)
     const sideGap = PATH_HALF_WIDTH + LABEL_SIDE_GAP
     const outer = first.x > mapCenterX ? 1 : -1
     const beside = (side: number, atY: number) => ({
       text,
+      lines,
       x: first.x + side * sideGap,
       y: atY,
       anchor: side > 0 ? 'start' as const : 'end' as const,
     })
     const besideLevelY = above(first.y - PATH_MAP_NODE_RADIUS)
+    // Just above the first level, for a title with the turn of a path close above it.
+    const nearLevelY = first.y - PATH_MAP_NODE_RADIUS - LABEL_LEVEL_GAP - LABEL_HALF_HEIGHT
     const candidates = [
-      { text, x: first.x, y, anchor: 'middle' as const },
+      { text, lines, x: first.x, y, anchor: 'middle' as const },
       beside(outer, y),
       beside(-outer, y),
       ...(besideLevelY === y ? [] : [beside(outer, besideLevelY), beside(-outer, besideLevelY)]),
+      beside(outer, nearLevelY),
+      beside(-outer, nearLevelY),
     ]
     // The title stays above its world unless something actually runs through it
     // there. Beside the path it keeps a little clear space as well. Where nothing
@@ -654,10 +764,10 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     }
   }
   for (const label of labels) {
-    const width = label.text.length * LABEL_CHAR_WIDTH
+    const width = widestLine(label.lines) * LABEL_CHAR_WIDTH
     const x1 = label.anchor === 'middle' ? label.x - width / 2 : label.anchor === 'end' ? label.x - width : label.x
     xs.push(x1, x1 + width)
-    ys.push(label.y - 14, label.y + 8)
+    ys.push(label.y - 14 - (label.lines.length - 1) * PATH_MAP_LABEL_LINE_HEIGHT, label.y + 8)
   }
   // Centred on where the map starts, however lopsided it gets further down.
   const centerX = mapCenterX

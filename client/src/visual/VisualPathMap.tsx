@@ -22,13 +22,14 @@ import {
   computePathMapLayout,
   PATH_MAP_BOSS_NODE_RADIUS,
   PATH_MAP_CORNER_RADIUS,
+  PATH_MAP_LABEL_LINE_HEIGHT,
   PATH_MAP_NODE_RADIUS,
   roundedPathData,
   type PathMapNode,
 } from './pathMapLayout'
 import { visualInterfaceScale } from './interfaceScale'
 import { bonusAnchorsOf, computeVisualProgressFrontier, isVisualLevelUnlocked } from './visualWorldProgress'
-import { NEUTRAL_WORLD_COLOR, WORLD_SCHEMES } from './worldScheme'
+import { CLASSIC_COLOR_OF_SCHEME, NEUTRAL_WORLD_COLOR, WORLD_SCHEMES } from './worldScheme'
 
 /** The named world colours. Their fill and edge are in the palette (palette.css),
  * as `--pal-world-<name>` and `--pal-world-<name>-edge`. */
@@ -62,10 +63,12 @@ interface LevelMeta {
   introduction?: string
 }
 
+/** With the neutral palette a world is drawn in its scheme, and a world with a plain
+ * colour or none in grey, as its levels are. */
 function worldColor(name: string, neutral: boolean) {
-  const known = WORLD_COLOR_NAMES.has(name) || (neutral && WORLD_SCHEME_NAMES.has(name))
-    ? name
-    : neutral ? NEUTRAL_WORLD_COLOR : 'purple'
+  const known = neutral
+    ? (WORLD_SCHEME_NAMES.has(name) ? name : NEUTRAL_WORLD_COLOR)
+    : WORLD_COLOR_NAMES.has(name) ? name : 'purple'
   return { fill: `rgb(var(--pal-world-${known}))`, edge: `rgb(var(--pal-world-${known}-edge))` }
 }
 
@@ -119,10 +122,12 @@ function useLevelMeta(gameId: string, worldSize: Record<string, number> | null |
   return meta
 }
 
-function PathMapLevel({ node, meta, state, theme, neutral, onOpen }: {
+function PathMapLevel({ node, meta, state, theme, neutral, waitsFor, onOpen }: {
   node: PathMapNode
   meta?: LevelMeta
   state: 'completed' | 'frontier' | 'locked'
+  /** While locked: worlds the level waits for that no path on the map leads from. */
+  waitsFor?: string[]
   theme: PathMapTheme
   /** The game has the neutral palette (`VisualNeutralPalette`). */
   neutral: boolean
@@ -132,7 +137,8 @@ function PathMapLevel({ node, meta, state, theme, neutral, onOpen }: {
   const color = worldColor(node.color, neutral)
   const label = meta?.label ?? String(node.index)
   const title = plainLevelTitle(meta?.title ?? `Level ${label}`)
-  const { tooltip, triggerProps } = useMapLevelTooltip(state === 'locked' ? `🔒 ${title}` : title)
+  const needs = waitsFor?.length ? ` (needs ${waitsFor.join(', ')})` : ''
+  const { tooltip, triggerProps } = useMapLevelTooltip(state === 'locked' ? `🔒 ${title}${needs}` : title)
   const activate = () => onOpen?.()
   const stroke = state === 'completed' ? color.edge : state === 'frontier' ? color.fill : theme.shadow
   const fill = state === 'completed' ? color.fill : theme.background
@@ -214,10 +220,16 @@ function TextLevelDialog({ title, introduction, onClose }: {
   )
 }
 
-export function VisualPathMap({ gameInfo, openAnyLevel }: {
+export function VisualPathMap({ gameInfo, openAnyLevel, fullComplete = false, highContrast = false }: {
   gameInfo: GameInfo
   /** The "Open Any Level" setting: locked levels open too. */
   openAnyLevel: boolean
+  /** The "Full Complete" setting: every level is shown as finished, whatever the
+   * saved progress. */
+  fullComplete?: boolean
+  /** The Visual Style "High Contrast" of a game with the neutral palette: the classic
+   * palette's dark scheme, with a plain colour for each world. */
+  highContrast?: boolean
 }) {
   const gameId = React.useContext(GameIdContext)
   const navigate = useNavigate()
@@ -225,7 +237,7 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
   const [searchParams, setSearchParams] = useSearchParams()
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const theme = THEME
-  const neutral = Boolean(gameInfo.visualNeutralPalette)
+  const neutral = Boolean(gameInfo.visualNeutralPalette) && !highContrast
   const colorOf = (name: string) => worldColor(name, neutral)
   // Subscribe so completions and imports repaint the map.
   useAppSelector(selectProgress(gameId))
@@ -264,7 +276,8 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
     worlds: Object.fromEntries(Object.entries(nodesById ?? {}).map(([world, node]) => [world, {
       title: node.title,
       bonusOf: node.visualBonusOf,
-      color: node.visualColor,
+      // Where the neutral palette isn't drawn, a scheme's world has a plain colour.
+      color: neutral ? node.visualColor : CLASSIC_COLOR_OF_SCHEME[node.visualColor ?? ''] ?? node.visualColor,
       column: node.visualMapColumn,
       shared: node.visualSharedPath,
       continues: node.visualContinues,
@@ -287,7 +300,7 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
     skippedLevels: gameInfo.skippedLevels ?? {},
     completionNeutralLevels: gameInfo.completionNeutralLevels ?? {},
     bonusAnchors: bonusAnchorsOf(nodesById),
-    isCompleted: (world, level) => selectCompleted(gameId, world, level)(store.getState()),
+    isCompleted: (world, level) => fullComplete || selectCompleted(gameId, world, level)(store.getState()),
     isEntered: (world, level) => selectEntered(gameId, world, level)(store.getState()),
   })
   const isDone = (world: string, level: number) => frontier.mapCompletedLevels[world]?.[level] ?? false
@@ -295,6 +308,11 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
     isDone(node.world, node.level)
       ? 'completed'
       : isVisualLevelUnlocked(frontier, node.world, node.level) ? 'frontier' : 'locked'
+
+  // A bonus level can wait for a world besides the one it branches off; its tooltip
+  // names it, by the title on the map (a world there can be several of the game's).
+  const waitsFor = (world: string) => [...new Set((frontier.bonusWaitsFor[world] ?? [])
+    .map(source => nodesById?.[source]?.title || source))]
 
   // Text level opened from the map, or sent here by its level route (`?text=`).
   const [openText, setOpenText] = React.useState<{ world: string; level: number } | null>(() => {
@@ -426,12 +444,20 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
               data-testid="path-map-world-label"
               data-unlocked={unlocked ? 'true' : 'false'}
               data-anchor={label.anchor}
-              x={label.x}
-              y={label.y}
-              dy="0.35em"
+              data-title={label.text}
               textAnchor={label.anchor}
               fill={unlocked ? colorOf(label.color).fill : theme.lockedText}
-            >{label.text}</text>
+            >
+              {/* A long title is on two lines; the last one is at `label.y`. */}
+              {label.lines.map((line, index) => (
+                <tspan
+                  key={index}
+                  x={label.x}
+                  y={label.y - (label.lines.length - 1 - index) * PATH_MAP_LABEL_LINE_HEIGHT}
+                  dy="0.35em"
+                >{line}</tspan>
+              ))}
+            </text>
           )
         })}
         {layout.nodes.map(node => {
@@ -444,6 +470,7 @@ export function VisualPathMap({ gameInfo, openAnyLevel }: {
               state={state}
               theme={theme}
               neutral={neutral}
+              waitsFor={state === 'locked' ? waitsFor(node.world) : undefined}
               onOpen={state !== 'locked' || openAnyLevel ? () => openLevel(node) : undefined}
             />
           )

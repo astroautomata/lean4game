@@ -13,6 +13,8 @@ import {
   faArrowRightArrowLeft,
   faBars,
   faBolt,
+  faCheckDouble,
+  faCircleHalfStroke,
   faCircleInfo,
   faDownload,
   faEraser,
@@ -29,7 +31,7 @@ import { GameIdContext } from '../app'
 import { PreferencesContext } from '../components/infoview/context'
 import { useGetGameInfoQuery } from '../state/api'
 import { selectCompleted, selectEntered, selectProgress } from '../state/progress'
-import { saveGameLightModePreference } from '../state/local_storage'
+import { saveGameLightModePreference, VISUAL_STYLE_SETTINGS, VisualStyleSetting } from '../state/local_storage'
 import { store } from '../state/store'
 import { computeWorldLayout } from '../components/world_tree'
 import { plainLevelTitle } from '../components/annotated_level_title'
@@ -454,6 +456,13 @@ function VisualMapMenuButton() {
   )
 }
 
+/** What the "Visual Style" setting shows for each of its choices. */
+const VISUAL_STYLE_LABELS: Record<VisualStyleSetting, string> = {
+  standard: 'Standard',
+  black: 'Standard Black',
+  'high-contrast': 'High Contrast',
+}
+
 function VisualMapAppBar({
   gameTitle,
   autoBranchSwitching,
@@ -463,6 +472,10 @@ function VisualMapAppBar({
   fastExfalsoFixedByGame,
   openAnyLevel,
   onToggleOpenAnyLevel,
+  fullComplete,
+  onToggleFullComplete,
+  visualStyle,
+  onNextVisualStyle,
   isLightMode,
   onToggleLightMode,
 }: {
@@ -475,8 +488,15 @@ function VisualMapAppBar({
   fastExfalsoFixedByGame: boolean
   openAnyLevel: boolean
   onToggleOpenAnyLevel: () => void
+  fullComplete: boolean
+  onToggleFullComplete: () => void
+  visualStyle: VisualStyleSetting
+  /** Only the games with the neutral palette pass this: the setting steps on to the
+   * same look on black, then to the classic palette's dark scheme, and round again. */
+  onNextVisualStyle?: () => void
   isLightMode: boolean
-  /** Only the games that offer the light scheme pass this. */
+  /** Only the games that offer the light scheme pass this: those with a path map,
+   * but not with the neutral palette, which has one scheme. */
   onToggleLightMode?: () => void
 }) {
   const { t } = useTranslation()
@@ -569,6 +589,32 @@ function VisualMapAppBar({
           <span>{t('Open Any Level')}</span>
           <span className="visual-map-toggle-state" aria-hidden="true">{openAnyLevel ? 'On' : 'Off'}</span>
         </button>
+        <button
+          type="button"
+          className={`visual-map-menu-toggle${fullComplete ? ' active' : ''}`}
+          aria-pressed={fullComplete}
+          onClick={onToggleFullComplete}
+          title="Show every level as finished, in full colour. Your own progress is kept."
+        >
+          <FontAwesomeIcon icon={toIconProp(faCheckDouble)} />
+          <span>{t('Full Complete')}</span>
+          <span className="visual-map-toggle-state" aria-hidden="true">{fullComplete ? 'On' : 'Off'}</span>
+        </button>
+        {onNextVisualStyle && (
+          <button
+            type="button"
+            className={`visual-map-menu-toggle${visualStyle === 'standard' ? '' : ' active'}`}
+            data-testid="visual-style-setting"
+            data-visual-style-setting={visualStyle}
+            aria-label={`${t('Visual Style')}: ${VISUAL_STYLE_LABELS[visualStyle]}`}
+            onClick={onNextVisualStyle}
+            title="Standard, Standard Black (every background black) or High Contrast (the earlier dark colours)"
+          >
+            <FontAwesomeIcon icon={toIconProp(faCircleHalfStroke)} />
+            <span>{t('Visual Style')}</span>
+            <span className="visual-map-toggle-state" aria-hidden="true">{VISUAL_STYLE_LABELS[visualStyle]}</span>
+          </button>
+        )}
         <button onClick={() => { setPopup(PopupType.upload); closeMenu() }}>
           <FontAwesomeIcon icon={toIconProp(faUpload)} />&nbsp;{t('Import')}
         </button>
@@ -594,6 +640,10 @@ export function VisualWorldMap({ levelMode = 'visual' }: { levelMode?: MapLevelM
     setIsVisualFastExfalso,
     isVisualOpenAnyLevel,
     setIsVisualOpenAnyLevel,
+    isVisualFullComplete,
+    setIsVisualFullComplete,
+    visualStyleSetting,
+    setVisualStyleSetting,
   } = React.useContext(PreferencesContext)
   const gameInfo = useGetGameInfoQuery({ game: gameId })
   useRetryUntilData(gameInfo)
@@ -701,7 +751,8 @@ export function VisualWorldMap({ levelMode = 'visual' }: { levelMode?: MapLevelM
       skippedLevels: skippedLevels ?? {},
       completionNeutralLevels: completionNeutralLevels ?? {},
       bonusAnchors: bonusAnchorsOf(worlds.nodes),
-      isCompleted: (worldId, level) => selectCompleted(gameId, worldId, level)(store.getState()),
+      // "Full Complete" shows every level as finished, whatever the saved progress.
+      isCompleted: (worldId, level) => isVisualFullComplete || selectCompleted(gameId, worldId, level)(store.getState()),
       isEntered: (worldId, level) => selectEntered(gameId, worldId, level)(store.getState()),
     })
 
@@ -977,8 +1028,15 @@ export function VisualWorldMap({ levelMode = 'visual' }: { levelMode?: MapLevelM
       fastExfalsoFixedByGame={gameInfo.data?.visualFastExfalso ?? false}
       openAnyLevel={isVisualOpenAnyLevel}
       onToggleOpenAnyLevel={() => setIsVisualOpenAnyLevel(!isVisualOpenAnyLevel)}
+      fullComplete={isVisualFullComplete}
+      onToggleFullComplete={() => setIsVisualFullComplete(!isVisualFullComplete)}
+      visualStyle={visualStyleSetting}
+      onNextVisualStyle={gameInfo.data.visualNeutralPalette
+        ? () => setVisualStyleSetting(VISUAL_STYLE_SETTINGS[
+            (VISUAL_STYLE_SETTINGS.indexOf(visualStyleSetting) + 1) % VISUAL_STYLE_SETTINGS.length]!)
+        : undefined}
       isLightMode={isVisualLightMode}
-      onToggleLightMode={gameInfo.data.visualPathMap
+      onToggleLightMode={gameInfo.data.visualPathMap && !gameInfo.data.visualNeutralPalette
         ? () => {
             saveGameLightModePreference(gameId, !isVisualLightMode)
             setIsVisualLightMode(!isVisualLightMode)
@@ -995,6 +1053,8 @@ export function VisualWorldMap({ levelMode = 'visual' }: { levelMode?: MapLevelM
         <VisualPathMap
           gameInfo={gameInfo.data}
           openAnyLevel={isVisualOpenAnyLevel}
+          fullComplete={isVisualFullComplete}
+          highContrast={visualStyleSetting === 'high-contrast'}
         />
       </div>
     )

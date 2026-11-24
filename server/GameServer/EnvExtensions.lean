@@ -271,6 +271,9 @@ structure VisualGoalInfo where
   /-- Shown only while its goal matches, even in a game with `VisualPersistentHints`,
   where hints otherwise stay up after the proof moves on. -/
   onlyWhile : Bool := false
+  /-- Shown when none of the level's other goal hints matches the proof state
+  (`VisualGoalInfoOtherwise`). -/
+  otherwise : Bool := false
   text : String
 deriving Inhabited, Repr, ToJson, FromJson
 
@@ -664,18 +667,28 @@ structure Game where
   /-- The name the game gives the successor function, for Visual Lean's term builder
   (see `VisualSuccessorName`). `succ` when unset. -/
   visualSuccessorName? : Option String := none
+  /-- How the game defines `a ≤ b`, as the equation under its `∃ c`, for the cards where
+  Visual Lean writes the definition out itself (see `VisualLeDefinition`). NNG4's
+  `b = a + c` when unset. -/
+  visualLeDefinition? : Option String := none
   /-- When true, clicking a goal `a = a` in Visual Lean doesn't close it: the player
   opens it in Rewrite Mode and uses the check mark (see `VisualNoGoalRfl`). -/
   visualNoGoalRfl : Bool := false
   /-- Theorems that Visual Lean shows in the axiom colour, whatever inventory tab they
   are filed under (see `VisualAxioms`). -/
   visualAxioms : Array Name := #[]
-  /-- When true, Visual Lean uses greys for its base and the colours of the world being
-  played for the rest (see `VisualNeutralPalette`). -/
+  /-- When true, Visual Lean has one scheme, drawn in the page and colours of the world
+  being played (see `VisualNeutralPalette`). -/
   visualNeutralPalette : Bool := false
   /-- When true, Visual Lean keeps a level's variables in a column of their own (see
   `VisualTypeColumn`). -/
   visualTypeColumn : Bool := false
+  /-- How often a tactic can be used along one branch of a proof, in every level that
+  has no count of its own or of its world's (see `VisualTacticUses`). -/
+  visualTacticUses : Array VisualTacticUses := #[]
+  /-- When true, `cases` and `induction` on a variable `a` name the new one `a1` (see
+  `VisualNumberedSplits`). -/
+  visualNumberedSplits : Bool := false
 deriving Inhabited, ToJson, FromJson
 
 def getGameJson (game : «Game») : Json := Id.run do

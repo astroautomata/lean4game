@@ -8,7 +8,7 @@ import { flushSync } from 'react-dom'
 import type { CanvasState, GoalStream, HypCard as HypCardType, PropositionTheorem, PropositionTheoremCopy, VisualGoalInfo, VisualHypGoalInfo, VisualProofGraphInfo, VisualSpecializationInfo, VisualTactic, VisualTacticHypInfo, VisualTransformInfo } from './types'
 import type { ClickAction, ClickActionOption, InteractiveGoalsWithHints, ProofState } from '../components/infoview/rpc_api'
 import { HypCard, HypCardPreviewCard } from './HypCard'
-import { GoalCard, goalInfoMatchesGoal } from './GoalCard'
+import { GoalCard, matchingGoalInfos } from './GoalCard'
 import { PropositionTheoremTemplateCard, PropositionTheoremCopyCard, PropositionTheoremPreviewCard } from './PropositionTheoremCard'
 import { VisualTacticTemplateCard, VisualTacticPreviewCard } from './VisualTacticCard'
 import { guideRect, InstructionGuideArrow, isHypothesisTransformInfo, parseEqualityHyp, parseGoalEquality, parseTransformTarget, TransformationView } from './TransformationView'
@@ -24,6 +24,7 @@ import { canvasGridStartX, interactiveGoalsToStreams, proofStateToCanvas, variab
 import { interactionToPlayTactic } from './interactionToTactic'
 import { statementCanTargetGoal } from './goalApplication'
 import { tacticUsesOnBranch } from './tacticUses'
+import { splitNames } from './splitNames'
 import { currentVisualInterfaceScale } from './interfaceScale'
 import { buildForallSpecificationFromDisplay, buildQuantifiedTheoremApplication, buildRuntimeQuantifiedStatementDisplay } from './quantifiedStatement'
 import type { ForallSpecificationInfo } from './quantifiedStatement'
@@ -743,6 +744,8 @@ interface ProofStepRecord {
   activeStreamIdBefore: string | null
   /** The transform target active when this step was applied (non-null = was a rewrite). Used by undo to navigate back to the right mode. */
   transformTargetSnapshot: TransformTarget | null
+  /** The step was confirmed in the specialization view. */
+  fromConstructionView?: boolean
   /** Workspace theorem copies immediately before this interaction. */
   theoremCopiesBefore?: PropositionTheoremCopy[]
 }
@@ -843,6 +846,20 @@ function canvasHintsEmpty(hints: CanvasHints): boolean {
 /** What stays up once the hints stop matching: not those that only show while they match. */
 function canvasHintsKept(hints: CanvasHints): CanvasHints {
   return { ...hints, goal: hints.goal.filter(info => !info.onlyWhile) }
+}
+
+/** `hints` without those in any of `taken`. */
+function canvasHintsWithout(hints: CanvasHints, taken: readonly CanvasHints[]): CanvasHints {
+  const left = <T,>(infos: T[], pick: (set: CanvasHints) => T[]) =>
+    infos.filter(info => !taken.some(set => pick(set).includes(info)))
+  return {
+    goal: left(hints.goal, set => set.goal),
+    tacticHyp: left(hints.tacticHyp, set => set.tacticHyp),
+    hypGoal: left(hints.hypGoal, set => set.hypGoal),
+    hyp: left(hints.hyp, set => set.hyp),
+    theorem: left(hints.theorem, set => set.theorem),
+    graph: left(hints.graph, set => set.graph),
+  }
 }
 
 /** The inventory card of a theorem a hint names: by its Lean name or its display name. */
@@ -2566,6 +2583,9 @@ interface VisualCanvasProps {
    * tab beside Reset and Undo (`VisualTypeColumn`). Not in the phone's portrait
    * layout, which has its own column. */
   typeColumn?: boolean
+  /** `cases` and `induction` on `a` name the new number `a1`, not `d`
+   * (`VisualNumberedSplits`). */
+  numberedSplits?: boolean
   onInteraction: (proofBody: string) => Promise<ProofState | null>
   /** Re-check an exact full classic proof body without adding the visual prelude. */
   onValidateProof?: (proofBody: string) => Promise<ProofState | null>
@@ -2610,9 +2630,12 @@ function TheoremTray({
   onTemplateContextMenu,
   emphasizeItems,
   tacticUsesLeft,
+  branchOpen = true,
 }: {
   /** Uses left on the current branch, for tactics with a limit (`VisualTacticUses`). */
   tacticUsesLeft?: Record<string, number>
+  /** The branch being looked at still has a goal to prove. */
+  branchOpen?: boolean
   theorems: PropositionTheorem[]
   tactics: VisualTactic[]
   activeTab: TrayTab
@@ -2750,6 +2773,8 @@ function TheoremTray({
   const emphVisibleNow = pageItems.some(item => isEmphasized(item))
   const emphOnPrevPage = !emphVisibleNow && emphIndexes.some(i => i < pageRange.start)
   const emphOnNextPage = !emphVisibleNow && emphIndexes.some(i => i >= pageRange.end)
+  // A tactic with a count (`VisualTacticUses`) can still be used on this branch.
+  const tacticUseLeft = branchOpen && tactics.some(tactic => (tacticUsesLeft?.[tactic.name] ?? 0) > 0)
 
   return (
     <div
@@ -2844,7 +2869,8 @@ function TheoremTray({
             <button
               key={tab}
               type="button"
-              className={`tr-tab-btn${visibleTab === tab ? ' active' : ''}`}
+              className={`tr-tab-btn${visibleTab === tab ? ' active' : ''}${tab === 'tactics' && tacticUseLeft ? ' tactics-ready' : ''}`}
+              data-tray-tab={tab}
               onClick={() => onTabChange(tab)}
             >
               {tab === 'tactics' ? 'Tactics' : 'Theorems'}
@@ -2867,6 +2893,7 @@ export function VisualCanvas({
   rewriteOnly = false, hideRewriteDirection = false, hideSwapSides = false, noRewriteMode = false,
   noRewriteTabs = false, noHypothesesTab = false, startTab, tacticUses,
   emphasizeForall, mulDot = false, gameFastExfalso = false, typeColumn = false,
+  numberedSplits = false,
 }: VisualCanvasProps) {
   const { isVisualAutoBranchSwitching, isVisualFastExfalso } =
     React.useContext(PreferencesContext)
@@ -4722,13 +4749,9 @@ export function VisualCanvas({
       const { stream: targetStream, card: targetCard } = resolveHypDropTarget(overId)
       const targetName = interactionHypName(targetCard)
       if (targetCard && targetStream && targetName && tacticCanTargetHyp(tacticTemplate, targetCard)) {
+        const names = splitNames(targetStream.hyps.map(card => card.hyp.names[0] ?? ''), targetName, numberedSplits)
         if (tacticTemplate.name === 'induction') {
-          const playTactic = interactionToPlayTactic({
-            type: 'drag_induction',
-            hypName: targetName,
-            predecessorName: nextFreshHypName(targetStream.hyps, 'd'),
-            inductionHypName: nextFreshHypName(targetStream.hyps, 'hd'),
-          })
+          const playTactic = interactionToPlayTactic({ type: 'drag_induction', hypName: targetName, ...names })
           applyDroppedInteraction(playTactic, activeId, {
             streamSplit: true,
             targetStreamId: targetStream.id,
@@ -4750,9 +4773,7 @@ export function VisualCanvas({
           const playTactic = interactionToPlayTactic({
             type: 'drag_cases',
             hypName: targetName,
-            predecessorName: targetCard.hyp.isAssumption
-              ? undefined
-              : nextFreshHypName(targetStream.hyps, 'd'),
+            predecessorName: targetCard.hyp.isAssumption ? undefined : names.predecessorName,
           })
           const streamSplit = casesTacticSplits(targetCard)
           applyDroppedInteraction(playTactic, activeId, {
@@ -5663,6 +5684,7 @@ export function VisualCanvas({
       activeStreamIdAfter: nextActiveId,
       activeStreamIdBefore: activeStreamId,
       transformTargetSnapshot: null,
+      fromConstructionView: true,
       theoremCopiesBefore: cloneTheoremCopies(theoremCopies),
     })
 
@@ -6331,13 +6353,12 @@ export function VisualCanvas({
   }, [activeStreamId, canvasState.streams, comparisonTransformEnabled, constructionTarget,
     displayCanvasState.streams, rewriteOnly, transformTarget])
 
-  /** The check mark: close the matching goal with rfl. In a Rewrite-only level,
-   * or when it finishes the level, Rewrite Mode stays open with the check mark
-   * green (Back returns to the finished proof); when other goals remain, the
-   * player goes back to them. */
+  /** The check mark: close the matching goal with rfl. A Rewrite-only level has
+   * nowhere else to go, so Rewrite Mode stays open with the check mark in the
+   * colour of what is finished. In any other level the player is taken back to
+   * Proposition Mode: to the goals that remain, or to the finished proof. */
   const handleRewriteCheck = async (): Promise<boolean> => {
     if (!transformingStream || isProcessing || canvasState.completed) return false
-    const otherGoalsRemain = canvasState.streams.some(stream => stream.id !== transformingStream.id)
     const accepted = await applyInteraction('click_goal', transformingStream.id, {
       solvedGoalId: transformingStream.id,
       targetStreamId: transformingStream.id,
@@ -6346,7 +6367,7 @@ export function VisualCanvas({
     })
     if (accepted && !rewriteOnly) {
       setTransformationVersion(v => v + 1)
-      if (otherGoalsRemain) dismissTransformationView()
+      dismissTransformationView()
     }
     return accepted
   }
@@ -6691,7 +6712,7 @@ export function VisualCanvas({
     return {
       goal: displayGoalText === null
         ? []
-        : visibleVisualGoalInfos.filter(info => goalInfoMatchesGoal(info, displayGoalText, displayHypTypeTexts)),
+        : matchingGoalInfos(visibleVisualGoalInfos, displayGoalText, displayHypTypeTexts),
       tacticHyp: (visualTacticHypInfos ?? []).filter(info => goalMatches(info.goal)),
       hypGoal: hypGoalInfos.filter(info =>
         info.target !== 'hyp' && info.target !== 'theorem' && goalMatches(info.goal) && withoutExcludedHyp(info)),
@@ -6710,10 +6731,18 @@ export function VisualCanvas({
     }
   }, [displayGoalText, displayHypTypeTexts, proofGraphVisible, visibleHyps, visibleVisualGoalInfos,
     visualHypGoalInfos, visualProofGraphInfos, visualTacticHypInfos])
+  // A step taken in Rewrite Mode or in the specialization view is what a hint that
+  // was up before it asked for, so that hint is gone when the player is back here,
+  // and stays gone if a later state (the finished proof, say) meets its conditions again.
+  const stepsTakenInAnotherMode = React.useMemo(
+    () => proofSteps.flatMap((step, index) =>
+      step.transformTargetSnapshot !== null || step.fromConstructionView ? [index + 1] : []),
+    [proofSteps],
+  )
   // The hints stay up when the level is finished, like after any other move.
   const canvasHints = usePersistentHints(
     persistentHints, proofSteps.length, matchingCanvasHints,
-    canvasHintsEmpty, canvasHintsKept,
+    canvasHintsEmpty, canvasHintsKept, stepsTakenInAnotherMode, canvasHintsWithout,
   )
   const shownGoalInfos = React.useMemo(() => withText(canvasHints.goal), [canvasHints.goal])
   const activeTacticHypInfos = React.useMemo(
@@ -6836,7 +6865,12 @@ export function VisualCanvas({
             ? rectCenter(goalCardEl.getBoundingClientRect()).y
             : midpoint.y
         const guideCenterY = isPhonePortrait ? midpoint.y : goalCenterY
-        const left = clampViewportValue(lineMaxX + 34, minLeft, maxLeft)
+        // Beside the goal card, whose height the callout is at, never over it.
+        const goalCardLeft = isPhonePortrait ? undefined : goalCardEl?.getBoundingClientRect().left
+        const maxLeftOfGoal = goalCardLeft === undefined
+          ? maxLeft
+          : Math.max(minLeft, Math.min(maxLeft, goalCardLeft - guideWidth - 16))
+        const left = clampViewportValue(lineMaxX + 34, minLeft, maxLeftOfGoal)
         const top = clampViewportValue(guideCenterY, minCenterY, maxCenterY)
 
         nextGuides.push({
@@ -7284,13 +7318,9 @@ export function VisualCanvas({
     const latestApplyInteraction = applyInteractionRef.current
     if (!latestApplyInteraction) throw new Error('Visual interaction bridge is not ready')
 
+    const names = splitNames(stream.hyps.map(card => card.hyp.names[0] ?? ''), targetPlayName, numberedSplits)
     if (tacticName === 'induction') {
-      const playTactic = interactionToPlayTactic({
-        type: 'drag_induction',
-        hypName: targetPlayName,
-        predecessorName: nextFreshHypName(stream.hyps, 'd'),
-        inductionHypName: nextFreshHypName(stream.hyps, 'hd'),
-      })
+      const playTactic = interactionToPlayTactic({ type: 'drag_induction', hypName: targetPlayName, ...names })
       await latestApplyInteraction(playTactic, `visual_tactic_${tacticName}`, {
         streamSplit: true,
         targetStreamId: stream.id,
@@ -7310,9 +7340,7 @@ export function VisualCanvas({
       const playTactic = interactionToPlayTactic({
         type: 'drag_cases',
         hypName: targetPlayName,
-        predecessorName: targetCard.hyp.isAssumption
-          ? undefined
-          : nextFreshHypName(stream.hyps, 'd'),
+        predecessorName: targetCard.hyp.isAssumption ? undefined : names.predecessorName,
       })
       await latestApplyInteraction(playTactic, `visual_tactic_${tacticName}`, {
         streamSplit: casesTacticSplits(targetCard),
@@ -8016,14 +8044,8 @@ export function VisualCanvas({
   const mobileBelowGoalInfos = persistentHints
     ? shownGoalInfos.filter(info => info.position === 'below')
     : displayStream
-    ? visibleVisualGoalInfos.filter(info => {
-        if (info.position !== 'below') return false
-        if (info.goal && formatFormulaText(info.goal) !== displayGoalText) return false
-        const hypTypes = displayStream.goal.hyps.map(hyp => formatFormulaText(TaggedText_stripTags(hyp.type)))
-        if (info.requireHypType && !hypTypes.includes(formatFormulaText(info.requireHypType))) return false
-        if (info.excludeHypType && hypTypes.includes(formatFormulaText(info.excludeHypType))) return false
-        return true
-      })
+    ? matchingGoalInfos(visibleVisualGoalInfos, displayGoalText ?? '', displayHypTypeTexts)
+        .filter(info => info.position === 'below')
     : []
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -8316,6 +8338,7 @@ export function VisualCanvas({
               }}
               emphasizeItems={emphasizeItems}
               tacticUsesLeft={tacticUsesLeft}
+              branchOpen={currentStreamIsLive && !canvasState.completed}
             />
             {!isPhonePortrait && tacticHypGuides.map((guide, index) => (
               <React.Fragment key={`${guide.info.tactic}-${guide.info.hyp}-${index}`}>

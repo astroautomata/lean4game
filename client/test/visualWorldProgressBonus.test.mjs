@@ -58,6 +58,25 @@ test('a bonus unlocks with its anchor level, not with its whole world', () => {
   assert.equal(isVisualLevelUnlocked(after, 'Rewrite', 4), true)
 })
 
+test('a bonus with an edge from another world waits for that world too', () => {
+  const withEdge = done => computeVisualProgressFrontier({
+    worldIds: ['Main', 'Other', 'Bonus'],
+    edges: [['Main', 'Bonus'], ['Other', 'Bonus']],
+    worldSizes: { Main: 2, Other: 1, Bonus: 1 },
+    skippedLevels: {},
+    bonusAnchors: { Bonus: { world: 'Main', level: 1 } },
+    isCompleted: (world, level) => done.includes(`${world}:${level}`),
+  })
+  const anchorOnly = withEdge(['Main:1'])
+  assert.equal(isVisualLevelUnlocked(anchorOnly, 'Bonus', 1), false)
+  assert.deepEqual(anchorOnly.bonusWaitsFor, { Bonus: ['Other'] })
+  const both = withEdge(['Main:1', 'Other:1'])
+  assert.equal(isVisualLevelUnlocked(both, 'Bonus', 1), true)
+  assert.deepEqual(both.bonusWaitsFor, {})
+  // The other world alone doesn't open it.
+  assert.equal(isVisualLevelUnlocked(withEdge(['Other:1']), 'Bonus', 1), false)
+})
+
 test('both worlds open after the opening text level', () => {
   const start = frontier([])
   assert.equal(isVisualLevelUnlocked(start, 'Intro', 1), true)

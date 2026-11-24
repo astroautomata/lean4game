@@ -66,6 +66,8 @@ export interface VisualGoalInfo {
   hideAfterTactic?: string | null
   /** Shown only while its goal matches, even in a game with persistent hints. */
   onlyWhile?: boolean
+  /** Shown when none of the level's other goal hints matches (`VisualGoalInfoOtherwise`). */
+  otherwise?: boolean
   text: string
 }
 

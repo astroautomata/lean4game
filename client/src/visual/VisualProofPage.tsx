@@ -23,7 +23,7 @@ import type { CanvasState, PropositionTheorem, VisualGoalInfo, VisualHypGoalInfo
 import type { EqualityHyp } from './TransformationView'
 import { parseEqualityHyp } from './TransformationView'
 import { buildEqualityTheoremDisplay, buildPropositionTheoremDisplay } from './quantifiedStatement'
-import { inferAtomicReductionForms } from './existsDisplay'
+import { inferAtomicReductionForms, setLeDefinition } from './existsDisplay'
 import { goalInfosForLevel } from './levelPresentation'
 import type { ProofState } from '../components/infoview/rpc_api'
 import { getDataBaseUrl } from '../utils/url'
@@ -357,13 +357,16 @@ export function VisualProofPage() {
   }, [navigate, gameId, worldId, nextLevelId])
   // Next opens only a level the map would open, so players can't skip the
   // level that teaches a gesture; "Open Any Level" lifts the lock.
-  const { isVisualOpenAnyLevel } = useContext(PreferencesContext)
+  const { isVisualOpenAnyLevel, isVisualFullComplete } = useContext(PreferencesContext)
   const gameInfo = useGetGameInfoQuery({ game: gameId })
   useRetryUntilData(gameInfo)
   // Where fresh cards are laid out depends on it (leanToCanvas).
   setTypeColumnLayout(gameInfo.data?.visualTypeColumn ?? false)
+  // The definition written under a card that reads `a ≤ b` (existsDisplay).
+  setLeDefinition(gameInfo.data?.visualLeDefinition)
   const nextLevelLocked = useAppSelector(state => {
-    if (isVisualOpenAnyLevel) return false
+    // With every level shown as finished ("Full Complete"), none is locked either.
+    if (isVisualOpenAnyLevel || isVisualFullComplete) return false
     const { worlds, worldSize: worldSizes, skippedLevels: skipped, completionNeutralLevels } = gameInfo.data ?? {}
     if (!worlds || !worldSizes) return true
     const frontier = computeVisualProgressFrontier({
@@ -848,6 +851,7 @@ export function VisualProofPage() {
       mulDot={levelPresentation.mulDot}
       gameFastExfalso={gameInfo.data?.visualFastExfalso ?? false}
       typeColumn={gameInfo.data?.visualTypeColumn ?? false}
+      numberedSplits={gameInfo.data?.visualNumberedSplits ?? false}
       worldId={worldId}
       levelId={levelId}
       displayLevelId={displayLevelId}

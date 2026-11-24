@@ -10,7 +10,8 @@ export interface VisualProgressInput {
   worldSizes: Record<string, number>
   skippedLevels: Record<string, number[]>
   completionNeutralLevels?: Record<string, number[]>
-  /** Bonus worlds unlock once their anchor level is done, whatever the edges say. */
+  /** Bonus worlds unlock once their anchor level is done, however much of the world
+   * they branch off is left. An edge from any other world still makes them wait. */
   bonusAnchors?: Record<string, BonusAnchor>
   isCompleted: (world: string, level: number) => boolean
   isEntered?: (world: string, level: number) => boolean
@@ -24,6 +25,9 @@ export interface VisualProgressFrontier {
   completedWorlds: Record<string, boolean>
   /** No world leading here is unfinished, so its levels can be played. */
   unlockedWorlds: Record<string, boolean>
+  /** For a bonus world: the unfinished worlds it waits for besides the one it
+   * branches off, which the path map draws no path from. */
+  bonusWaitsFor: Record<string, string[]>
   nextLevels: Record<string, number | null>
   frontierWorlds: string[]
   highlightedLevels: Record<string, number>
@@ -84,9 +88,14 @@ export function computeVisualProgressFrontier({
     if (!source || !target || bonusAnchors[target]) continue
     if (incompleteWorlds.has(source)) unlockedWorlds[target] = false
   }
+  const bonusWaitsFor: Record<string, string[]> = {}
   for (const [worldId, anchor] of Object.entries(bonusAnchors)) {
     if (!(worldId in unlockedWorlds)) continue
-    unlockedWorlds[worldId] = completedLevels[anchor.world]?.[anchor.level] ?? false
+    const others = edges
+      .filter(([source, target]) => target === worldId && source && source !== anchor.world && incompleteWorlds.has(source))
+      .map(([source]) => source!)
+    if (others.length > 0) bonusWaitsFor[worldId] = others
+    unlockedWorlds[worldId] = (completedLevels[anchor.world]?.[anchor.level] ?? false) && others.length === 0
   }
 
   const frontierWorlds = worldIds.filter(worldId =>
@@ -104,6 +113,7 @@ export function computeVisualProgressFrontier({
     mapCompletedLevels,
     completedWorlds,
     unlockedWorlds,
+    bonusWaitsFor,
     nextLevels,
     frontierWorlds,
     highlightedLevels,

@@ -84,6 +84,8 @@ macro "VisualGoalInfoOnGoal" ident "false" str "show" str : command =>
   `(command| set_option linter.unusedVariables false)
 macro "VisualGoalInfoOnGoal" ident visualBool str "while" str : command =>
   `(command| set_option linter.unusedVariables false)
+macro "VisualGoalInfoOtherwise" ident visualBool str : command =>
+  `(command| set_option linter.unusedVariables false)
 macro "VisualGoalInfoOnGoalWithHyp" ident visualBool str str "show" str : command =>
   `(command| set_option linter.unusedVariables false)
 macro "VisualGoalInfoOnGoalWithoutHyp" ident visualBool str str "show" str : command =>
@@ -153,10 +155,15 @@ macro "VisualFastExfalso" : command => `(command| set_option linter.unusedVariab
 macro "VisualPersistentHints" : command => `(command| set_option linter.unusedVariables false)
 macro "VisualRewriteCheck" : command => `(command| set_option linter.unusedVariables false)
 macro "VisualSuccessorName" ident : command => `(command| set_option linter.unusedVariables false)
+/- Not a no-op: `click_prop` looks for this declaration when it names a witness. -/
+macro "VisualNumberedWitnesses" : command =>
+  `(command| def $(Lean.mkIdent `_root_.GameServer.visualNumberedWitnesses) : Unit := ())
 macro "VisualNoGoalRfl" : command => `(command| set_option linter.unusedVariables false)
+macro "VisualLeDefinition" str : command => `(command| set_option linter.unusedVariables false)
 macro "VisualAxioms" ident* : command => `(command| set_option linter.unusedVariables false)
 macro "VisualNeutralPalette" : command => `(command| set_option linter.unusedVariables false)
 macro "VisualTypeColumn" : command => `(command| set_option linter.unusedVariables false)
+macro "VisualNumberedSplits" : command => `(command| set_option linter.unusedVariables false)
 macro "VisualContinues" ident : command => `(command| set_option linter.unusedVariables false)
 macro "VisualPathMap" : command => `(command| set_option linter.unusedVariables false)
 macro "VisualBonusOf" ident num : command => `(command| set_option linter.unusedVariables false)

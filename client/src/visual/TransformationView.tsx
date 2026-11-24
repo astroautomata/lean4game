@@ -393,6 +393,14 @@ function printLeanExpression(node: ExpressionNode): string {
   return `(${printLeanExpression(node.left)} ${node.op} ${printLeanExpression(node.right)})`
 }
 
+/** How long the rule dock waits for fonts before it pages its cards as they are. */
+const FONT_WAIT_MS = 300
+/** How often, and how long apart, a layout that stays unmeasured is measured again. */
+const UNMEASURED_RETRIES = 5
+const UNMEASURED_RETRY_MS = 700
+/** How many bursts of remeasuring in a row get a look afterwards. */
+const REMEASURE_BURSTS = 5
+
 export function TransformationView({
   relation, goalLhsStr, goalRhsStr, goalLhsNode, goalRhsNode, equalityHyps, theoremEqualityHyps,
   onRewrite, onUndo, canUndo, onReset, canReset, onSwap, onClose, isReverse, onIsReverseChange,
@@ -673,26 +681,61 @@ export function TransformationView({
     measure()
     // Measuring has laid the cards out, so a font they need has started loading by
     // now. With none pending the measurement is final, and the dock can show in this
-    // very frame instead of popping in after the expression.
+    // very frame instead of popping in after the expression. A font that is slow to
+    // arrive isn't waited for: the cards are paged as they are, and measured again
+    // when it does arrive (see `remeasureRules`).
+    let fontTimer: number | undefined
     if (document.fonts && document.fonts.status !== 'loaded') {
-      void document.fonts.ready.then(() => {
-        if (cancelled) return
+      let settled = false
+      const settle = () => {
+        if (cancelled || settled) return
+        settled = true
         measure()
         setMeasuredLayoutKey(ruleDockLayoutKey)
-      })
+      }
+      void document.fonts.ready.then(settle)
+      fontTimer = window.setTimeout(settle, FONT_WAIT_MS)
     } else {
       setMeasuredLayoutKey(ruleDockLayoutKey)
     }
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      window.clearTimeout(fontTimer)
+    }
   }, [ruleDockLayoutKey, selectedTab])
 
   const hasRules = tabRules.length > 0
   const measuredWidths = cardWidthsByTab[selectedTab] ?? {}
   const hasMeasurements = measuredLayoutKey === ruleDockLayoutKey &&
     tabRules.every(rule => measuredWidths[rule.dragId] > 0)
+  // Should the measurements never settle, the view still has to show something
+  // (see the timer below).
+  const [forcedReady, setForcedReady] = useState(false)
+  // To be measured, every card of the tab has to be in the document. Before the dock
+  // is first shown that is one row of them all, out of sight. Once the dock is on
+  // screen, a measurement that is slow to settle must not show as that row, which
+  // runs off both edges of the window: the page keeps to the cards that fit by the
+  // widths known so far, and the others are measured out of sight (`offPage`).
+  const dockOnScreen = hasPresentedReadyDockRef.current || forcedReady
+  const measuringOnScreen = !hasMeasurements && dockOnScreen
+  const knownWidths = useMemo(() => {
+    const byId: Record<string, number> = {}
+    for (const widths of Object.values(cardWidthsByTab)) {
+      for (const [id, width] of Object.entries(widths)) if (width > 0) byId[id] = width
+    }
+    const all = Object.values(byId)
+    return { byId, average: all.length > 0 ? all.reduce((sum, width) => sum + width, 0) / all.length : undefined }
+  }, [cardWidthsByTab])
+  // A card's width in this tab, or what it measured in another, or the average card.
+  const estimatedWidth = (id: string) => {
+    const own = measuredWidths[id]
+    return own !== undefined && own > 0 ? own : knownWidths.byId[id] ?? knownWidths.average ?? pageWidth
+  }
   const pages = hasMeasurements
     ? packAdaptivePages(tabRules.map(rule => measuredWidths[rule.dragId] ?? pageWidth), pageWidth, cardGap)
-    : [{ start: 0, end: tabRules.length }]
+    : measuringOnScreen
+      ? packAdaptivePages(tabRules.map(rule => estimatedWidth(rule.dragId)), pageWidth, cardGap)
+      : [{ start: 0, end: tabRules.length }]
   const desiredPage = pageIndexByTab[selectedTab] ?? 0
   const totalPages = pages.length
   const clampedPage = Math.min(Math.max(0, desiredPage), totalPages - 1)
@@ -707,7 +750,6 @@ export function TransformationView({
   // single frame is the menu-bar flash players see after a rewrite.
   // Should the measurements never settle, the view still has to show something:
   // after a moment, present the rules as they are rather than a blank page.
-  const [forcedReady, setForcedReady] = useState(false)
   const dockPresentationReady = layoutReady || hasPresentedReadyDockRef.current || forcedReady
   useEffect(() => {
     if (dockPresentationReady) return
@@ -721,6 +763,22 @@ export function TransformationView({
     return () => window.clearTimeout(timer)
   }, [dockPresentationReady, dockLayoutKey, hasMeasurements, measuredDockLayoutKey, measuredLayoutKey,
     pageWidth, ruleDockHeight, ruleDockLayoutKey, tabRules.length])
+
+  // A layout that is still unmeasured after a while (a card had no size yet when it
+  // was looked at, say) is measured again, a few times over.
+  const unmeasuredRetriesRef = useRef(0)
+  useEffect(() => {
+    if (hasMeasurements) {
+      unmeasuredRetriesRef.current = 0
+      return
+    }
+    if (!hasRules || unmeasuredRetriesRef.current >= UNMEASURED_RETRIES) return
+    const timer = window.setTimeout(() => {
+      unmeasuredRetriesRef.current += 1
+      setMeasureEpoch(epoch => epoch + 1)
+    }, UNMEASURED_RETRY_MS)
+    return () => window.clearTimeout(timer)
+  }, [hasMeasurements, hasRules, ruleDockLayoutKey])
 
   useLayoutEffect(() => {
     if (!hasMeasurements) return
@@ -749,8 +807,12 @@ export function TransformationView({
   // has outgrown the page, measure every card of the tab again. A burst of
   // such rounds is cut short, so that a card that never settles can't keep the
   // dock remeasuring; once things have been quiet for a while the count starts
-  // over, since a later resize is a new change, not the same one again.
-  const remeasureRoundsRef = useRef({ rounds: 0, last: 0 })
+  // over, since a later resize is a new change, not the same one again. What a
+  // burst left unchecked is looked at once more when it is over (the last font
+  // of a cold start can arrive right after the fourth round), a few bursts at most.
+  const remeasureRoundsRef = useRef({ rounds: 0, last: 0, bursts: 0 })
+  const recheckRef = useRef<{ timer?: number; check?: () => void }>({})
+  useEffect(() => () => window.clearTimeout(recheckRef.current.timer), [])
   useEffect(() => {
     if (!hasMeasurements) return
     const page = pageRef.current
@@ -759,7 +821,15 @@ export function TransformationView({
       const now = Date.now()
       const burst = remeasureRoundsRef.current
       if (now - burst.last > 1000) burst.rounds = 0
-      if (burst.rounds >= 4) return
+      if (burst.rounds >= 4) {
+        if (burst.bursts >= REMEASURE_BURSTS) return
+        window.clearTimeout(recheckRef.current.timer)
+        recheckRef.current.timer = window.setTimeout(() => {
+          remeasureRoundsRef.current.bursts += 1
+          recheckRef.current.check?.()
+        }, 1050 - (now - burst.last))
+        return
+      }
       burst.rounds += 1
       burst.last = now
       setMeasureEpoch(epoch => epoch + 1)
@@ -774,8 +844,19 @@ export function TransformationView({
       const row = page.querySelector<HTMLElement>('.tr-rule-page-cards')
       const overflowing = cards.length > 1 && row !== null && row.scrollWidth - row.clientWidth > 1
       const gapChanged = Math.abs(renderedCardGap(page, cardGap) - cardGap) > 0.25
-      if (resized || overflowing || gapChanged) remeasureRules()
+      if (resized || gapChanged) {
+        remeasureRules()
+      } else if (overflowing) {
+        // The cards are the widths they were packed with and still don't fit: the
+        // page is narrower than it was taken to be.
+        const style = window.getComputedStyle(page)
+        const width = page.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+        setPageWidth(prev => (Math.abs(prev - width) > 0.5 ? width : prev))
+      } else {
+        remeasureRoundsRef.current.bursts = 0
+      }
     }
+    recheckRef.current.check = check
     const observer = new ResizeObserver(check)
     page.querySelectorAll('.tr-rule-card').forEach(card => observer.observe(card))
     const fonts = typeof document === 'undefined' ? undefined : document.fonts
@@ -783,6 +864,7 @@ export function TransformationView({
     return () => {
       observer.disconnect()
       fonts?.removeEventListener?.('loadingdone', check)
+      if (recheckRef.current.check === check) recheckRef.current.check = undefined
     }
   }, [cardGap, dockLayoutKey, hasMeasurements, measuredWidths])
 
@@ -1732,10 +1814,11 @@ export function TransformationView({
             >
               {hasRules ? (
                 <>
-                  <div className="tr-rule-page-cards">
-                    {pageItems.map(rule => (
+                  <div className={`tr-rule-page-cards${measuringOnScreen ? ' measuring' : ''}`}>
+                    {(measuringOnScreen ? tabRules : pageItems).map((rule, index) => (
                       <EqualityHypCard
                         key={rule.dragId}
+                        offPage={measuringOnScreen && (index < pageRange.start || index >= pageRange.end)}
                         dragId={rule.dragId}
                         label={rule.label}
                         lhsStr={rule.lhsStr}

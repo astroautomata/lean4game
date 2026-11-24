@@ -18,6 +18,13 @@ export function goalInfoMatchesGoal(info: VisualGoalInfo, goalText: string, hypT
   return true
 }
 
+/** The goal hints of a level that go with a goal: those whose conditions hold, or, when
+ * none does, the ones written for every other state (`VisualGoalInfoOtherwise`). */
+export function matchingGoalInfos(infos: readonly VisualGoalInfo[], goalText: string, hypTypeTexts: string[]): VisualGoalInfo[] {
+  const matched = infos.filter(info => !info.otherwise && goalInfoMatchesGoal(info, goalText, hypTypeTexts))
+  return matched.length > 0 ? matched : infos.filter(info => info.otherwise)
+}
+
 interface GoalCardProps {
   id: string
   goal: InteractiveGoal
@@ -86,7 +93,7 @@ export function GoalCard({
   const activeVisualInfos = React.useMemo(
     () => infosMatched
       ? visualInfos
-      : visualInfos.filter(info => goalInfoMatchesGoal(info, goalText, hypTypeTexts)),
+      : matchingGoalInfos(visualInfos, goalText, hypTypeTexts),
     [goalText, hypTypeTexts, infosMatched, visualInfos],
   )
 

@@ -92,13 +92,23 @@ export function splitTopLevelNegation(text: string): string | null {
   return negated
 }
 
+/** The equation of `a ≤ b`'s definition, `∃ c, …`, in `a`, `b` and `c`: NNG4's, unless
+ * the game says how it defines `≤` (`VisualLeDefinition`). Set by the proof page. */
+const NNG4_LE_DEFINITION = 'b = a + c'
+let leDefinition = NNG4_LE_DEFINITION
+
+export function setLeDefinition(equation: string | null | undefined) {
+  leDefinition = equation?.trim() || NNG4_LE_DEFINITION
+}
+
 function expandTopLevelLessOrEqual(displayText: string): string | null {
   const lessOrEqual = splitTopLevelRelation(displayText, '≤')
   if (!lessOrEqual) return null
   const [lhs, rhs] = lessOrEqual
   const identifiers = displayText.match(/[\p{L}][\p{L}\p{N}_']*/gu) ?? []
   const witness = nextExistsName(new Set(identifiers))
-  return `∃ ${witness}, ${rhs} = ${lhs} + ${witness}`
+  const values: Record<string, string> = { a: lhs, b: rhs, c: witness }
+  return `∃ ${witness}, ${leDefinition.replace(/\b[abc]\b/gu, name => values[name]!)}`
 }
 
 export interface ExistsDisplayInfo {
