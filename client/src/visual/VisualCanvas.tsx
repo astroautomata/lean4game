@@ -8478,7 +8478,7 @@ export function VisualCanvas({
             {activeDraggedHyp
               ? <HypCardPreviewCard card={activeDraggedHyp} iffDirection={getIffDirection(activeDraggedHyp.id)} />
               : activeDraggedTheorem
-              ? <PropositionTheoremPreviewCard theorem={activeDraggedTheorem} iffDirection={getIffDirection(activeDraggedTheoremSourceId ?? `theorem_template_${activeDraggedTheorem.id}`)} />
+              ? <PropositionTheoremPreviewCard theorem={activeDraggedTheorem} iffDirection={getIffDirection(activeDraggedTheoremSourceId ?? `theorem_template_${activeDraggedTheorem.id}`)} fromTray={activeDraggedTheoremSourceId?.startsWith('theorem_template_') ?? false} />
               : activeDraggedTactic
                 ? <VisualTacticPreviewCard tactic={activeDraggedTactic} />
                 : null}

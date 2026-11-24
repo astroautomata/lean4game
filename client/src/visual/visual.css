@@ -1859,8 +1859,11 @@
 /* The theorem cards of the lower menu are all one height, whatever they hold. A card
    with more lines than two (its name on a line of its own, the definition under a
    `≠` or a `≤`, the `∀` line) sets them smaller and closer together. A phone held
-   upright lists its cards instead, each as tall as it needs. */
-.visual-page:not(.phone-portrait) .theorem-tray-panel .statement-card.theorem-tray-card {
+   upright lists its cards instead, each as tall as it needs. A card picked up from
+   the menu keeps this look while it is carried (`theorem-tray-held`): set at its
+   usual size in the menu card's width, its lines would wrap and reach back down
+   over the menu, where letting go puts the card away. */
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .statement-card.theorem-tray-card, .statement-card.theorem-tray-held) {
   box-sizing: border-box;
   height: 5.25rem;
   padding-block: 0.3rem;
@@ -1868,44 +1871,44 @@
   flex-direction: column;
   justify-content: center;
 }
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card .statement-card-main {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held) .statement-card-main {
   justify-content: center;
   line-height: 1.3;
 }
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-3 .proposition,
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-3 .hyp-name,
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-3 .hyp-colon {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .proposition,
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .hyp-name,
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .hyp-colon {
   font-size: 1.02rem;
 }
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-3 .statement-card-main {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .statement-card-main {
   line-height: 1.18;
 }
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-3 .statement-forall-footer {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .statement-forall-footer {
   margin-top: 0.12rem;
   font-size: 0.78rem;
   line-height: 1.15;
 }
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-3 .statement-atomic-form {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .statement-atomic-form {
   font-size: 0.74rem;
   line-height: 1.1;
 }
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-4 .proposition,
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-4 .hyp-name,
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-4 .hyp-colon {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .proposition,
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .hyp-name,
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .hyp-colon {
   font-size: 0.92rem;
 }
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-4 .statement-card-main {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .statement-card-main {
   line-height: 1.12;
 }
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-4 .statement-card-main > .proposition {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .statement-card-main > .proposition {
   margin-top: 0;
 }
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-4 .statement-forall-footer {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .statement-forall-footer {
   margin-top: 0.06rem;
   font-size: 0.7rem;
   line-height: 1.1;
 }
-.visual-page:not(.phone-portrait) .theorem-tray-panel .theorem-tray-card.theorem-card-lines-4 .statement-atomic-form {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .statement-atomic-form {
   font-size: 0.68rem;
   line-height: 1.05;
 }

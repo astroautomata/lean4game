@@ -85,9 +85,11 @@ function useClickWithoutDrag(isDragging: boolean, onClick?: () => void) {
   }
 }
 
-export function PropositionTheoremPreviewCard({ theorem, iffDirection }: { theorem: PropositionTheorem; iffDirection?: IffDirection }) {
+/** The card under the pointer during a drag. `fromTray`: it was picked up from the
+ *  lower menu, and keeps the look of the menu's cards until it is let go. */
+export function PropositionTheoremPreviewCard({ theorem, iffDirection, fromTray = false }: { theorem: PropositionTheorem; iffDirection?: IffDirection; fromTray?: boolean }) {
   return (
-    <div className={`statement-card theorem-copy-card theorem-overlay-card${theorem.forallFooter ? ' has-forall-footer' : ''}${isIntegerTheorem(theorem) ? ' int-theorem' : ''}${theoremCardLayoutClass(theorem)}`}>
+    <div className={`statement-card theorem-copy-card theorem-overlay-card${fromTray ? ' theorem-tray-held' : ''}${theorem.forallFooter ? ' has-forall-footer' : ''}${isIntegerTheorem(theorem) ? ' int-theorem' : ''}${theoremCardLayoutClass(theorem)}`}>
       <PropositionTheoremContent theorem={theorem} iffDirection={iffDirection} />
     </div>
   )

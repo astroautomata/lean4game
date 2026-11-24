@@ -249,6 +249,7 @@ describe('local NNG4 release maps', () => {
         requireHypType: null,
         excludeHypType: null,
         onlyWhile: false,
+        otherwise: false,
         text: "{pc: Click | mobile: Tap} once to apply 'rfl' and finish the level.",
       })
     })
@@ -261,6 +262,7 @@ describe('local NNG4 release maps', () => {
         requireHypType: null,
         excludeHypType: null,
         onlyWhile: false,
+        otherwise: false,
         text: '{pc: Click | mobile: Tap} there-exists goals to specialize them with a particular constructed example',
       })
       expect(JSON.stringify(response.body)).not.to.match(/double-click[^"\n]*(?:there-exists|existential)/iu)
