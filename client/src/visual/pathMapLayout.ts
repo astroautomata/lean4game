@@ -16,10 +16,13 @@ export interface PathMapWorld {
   title: string
   /** Bonus branch off this level of another world. */
   bonusOf?: { world: string; level: number }
+  /** The side a bonus world's levels sprout off to; away from the centre without it. */
+  bonusSide?: 'left' | 'right'
   /** Named colour, see `PATH_MAP_COLORS`. */
   color?: string
   /** Column: 0 is the centre, negative is left. For a bonus world, the column
-   * that its path onwards to a later world runs down. */
+   * that its path onwards to a later world runs down. Bonus branches off one level
+   * that lead to one world and name its column join into one path there. */
   column?: number
   /** Below every other world, as a closing level is. */
   bottom?: boolean
@@ -230,9 +233,10 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     const root = bonusRoot(source)
     if (root !== target) onwardRoots[target]!.push(root)
   }
-  // A bonus world can also wait for a main world besides the one it branches off.
+  // A bonus world can also wait for a world besides the one it branches off, be that a
+  // main world or another bonus world.
   const intoBonusEdges = dedupeEdges(input.edges).filter(([source, target]) =>
-    mainSet.has(source) && bonusOf(target) !== undefined && bonusOf(target)!.world !== source)
+    present.has(source) && bonusOf(target) !== undefined && bonusOf(target)!.world !== source)
   const isBottom = (world: string) => input.worlds[world]?.bottom === true
 
   // Dependency order; a cycle (which MakeGame reports) falls back to name order.
@@ -395,15 +399,26 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     const anchor = bonusOf(world!)!
     const from = anchorLevel(levelsOf[anchor.world]!, anchor.level)
     const anchorX = levelX[anchor.world]![from]!
-    const side = anchorX > 0 ? 1 : -1
+    const asked = input.worlds[world!]?.bonusSide
+    const side = asked === 'left' ? -1 : asked === 'right' ? 1 : anchorX > 0 ? 1 : -1
     column[world!] = column[anchor.world] ?? 0
     const siblings = branchesAt[`${anchor.world}:${from}`]!
     const branchRow = row[anchor.world]![from]! + 1 + siblings.indexOf(world!)
     row[world!] = Object.fromEntries(levelsOf[world!]!.map(level => [level, branchRow]))
     // Branches that fan out from a stem start past it.
-    const fanShift = branchesUseStem(anchor.world, from) ? BONUS_FAN_SHIFT_FRACTION * bonusStep : 0
+    const useStem = branchesUseStem(anchor.world, from)
+    const fanShift = useStem ? BONUS_FAN_SHIFT_FRACTION * bonusStep : 0
+    // A row sent towards the centre that is long enough to reach the next column runs
+    // across the columns that paths come down. Its levels then sit half a column apart,
+    // a quarter of a column from each column they pass, so those paths go down midway
+    // between two levels and never brush one.
+    const inward = anchorX !== 0 && side !== Math.sign(anchorX)
+    const acrossColumns = inward && levelsOf[world!]!.length * bonusStep > columnWidth - bonusStep / 2 &&
+      columnWidth / 2 >= MIN_BONUS_STEP
     levelX[world!] = Object.fromEntries(levelsOf[world!]!.map((level, levelIndex) =>
-      [level, anchorX + side * ((levelIndex + 1) * bonusStep + fanShift)]))
+      [level, anchorX + side * (acrossColumns
+        ? (levelIndex + (useStem ? 1.5 : 0.5)) * columnWidth / 2
+        : (levelIndex + 1) * bonusStep + fanShift)]))
   }
   const placed = worldIds.filter(world => row[world] !== undefined)
 
@@ -565,6 +580,10 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
   }
   // A bonus world's path onwards runs down the bonus world's column, if it has
   // one, or straight down from its last level, and turns in above the target.
+  // Branches off one level that lead to the same world and share a lane join there:
+  // the one on the lowest row runs along its row to the lane, and a branch on a row
+  // above comes down beside its own levels to that row and runs in from there, so the
+  // two meet and go down as one path.
   for (const [source, target] of onwardEdges) {
     if (row[source] === undefined || row[target] === undefined) continue
     const fromLevel = levelsOf[source]!.at(-1)!
@@ -573,10 +592,20 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     const lane = input.worlds[source]?.column
     const laneX = lane === undefined ? start.x : lane * columnWidth
     const turnY = end.y - TURN_ROWS_ABOVE * rowHeight
-    const leaveY = start.y + (COLUMN_CHANGE_ROWS - TURN_ROWS_ABOVE) * rowHeight
+    const anchor = bonusOf(source)!
+    const siblings = branchesAt[`${anchor.world}:${anchorLevel(levelsOf[anchor.world]!, anchor.level)}`] ?? []
+    const joinY = Math.max(...siblings
+      .filter(world => row[world] !== undefined && input.worlds[world]?.column === lane &&
+        onwardEdges.some(([from, to]) => from === world && to === target))
+      .map(world => position(world, levelsOf[world]!.at(-1)!).y), start.y)
+    const leaveY = joinY + (COLUMN_CHANGE_ROWS - TURN_ROWS_ABOVE) * rowHeight
     if (leaveY >= turnY) continue
     const change = { x: laneX, y: (isShared(target) ? leaveY : turnY) - PATH_MAP_CORNER_RADIUS }
-    const out = laneX === start.x ? [start, change] : [start, { x: laneX, y: start.y }, change]
+    const out = laneX === start.x
+      ? [start, change]
+      : joinY === start.y
+        ? [start, { x: laneX, y: start.y }, change]
+        : [start, { x: start.x, y: joinY }, { x: laneX, y: joinY }, change]
     if (laneX === end.x) {
       pushEdge(source, target, fromLevel, out, [change, end])
       continue
@@ -584,9 +613,10 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     bendY[target] = Math.min(bendY[target] ?? Infinity, turnY)
     pushEdge(source, target, fromLevel, out, [change, { x: laneX, y: turnY }, { x: end.x, y: turnY }, end])
   }
-  // A path into a bonus world from a world it doesn't branch off leaves that world's
-  // last level half a row down, between the rows of levels, crosses to above the bonus
-  // world's first level and drops onto it. It is drawn where the bonus lies lower and
+  // A path into a bonus world from a main world it doesn't branch off leaves that
+  // world's last level half a row down, or half a row below the bonuses off that level,
+  // between the rows of levels; it crosses to above the bonus world's first level and
+  // drops onto it. It is drawn where the bonus lies lower and
   // nothing stands in that last stretch; the height it crosses at keeps off the level
   // runs of other paths.
   for (const [source, target] of intoBonusEdges) {
@@ -595,8 +625,23 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     const start = position(source, fromLevel)
     const end = position(target, levelsOf[target]![0]!)
     if (end.x === start.x) continue
+    // From a bonus world, whose levels are a row: where the level it leads to lies
+    // further along that row's way and lower, the path carries the row on and turns
+    // down onto it.
+    const levels = levelsOf[source]!
+    const along = bonusOf(source) && levels.length > 0
+      ? Math.sign(start.x - (levels.length > 1 ? position(source, levels.at(-2)!).x : position(bonusOf(source)!.world, anchorLevel(levelsOf[bonusOf(source)!.world]!, bonusOf(source)!.level)).x))
+      : 0
+    if (along !== 0 && Math.sign(end.x - start.x) === along && end.y > start.y + PATH_MAP_CORNER_RADIUS &&
+        !columnBlocked(end.x, start.y - 1, end.y) && !runsAlong({ x: end.x, y: start.y }, { x: end.x, y: end.y })) {
+      const change = { x: start.x + along * PATH_MAP_NODE_RADIUS, y: start.y }
+      const into = [change, { x: end.x, y: start.y }, end]
+      pushEdge(source, target, fromLevel, [start, change], into)
+      routed.push([start, ...into.slice(1)])
+      continue
+    }
     for (const rows of INTO_BONUS_LEAVE_ROWS) {
-      const leaveY = start.y + rows * rowHeight
+      const leaveY = start.y + (branchRows(source, fromLevel) + rows) * rowHeight
       if (leaveY >= end.y - PATH_MAP_CORNER_RADIUS || columnBlocked(end.x, leaveY, end.y)) continue
       if (runsAlong({ x: start.x, y: leaveY }, { x: end.x, y: leaveY }) ||
           runsAlong({ x: end.x, y: leaveY }, { x: end.x, y: end.y })) continue
@@ -635,12 +680,14 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
   }
 
   // Where the level run of one path crosses the upright run of another, a short
-  // bridge is drawn over the crossing, so the two don't read as a junction.
+  // bridge is drawn over the crossing, so the two don't read as a junction. The row of
+  // a bonus world's levels is such a run too.
   const bridges: PathMapSegment[] = []
   const bridged = new Set<string>()
   const edgeOf = (key: string) => key.replace(/:(?:out|in)$/u, '')
+  const isBonusRow = (key: string) => key.startsWith('level:') && bonusOf(key.split(':')[1]!) !== undefined
   for (const over of segments) {
-    if (!over.key.startsWith('edge:')) continue
+    if (!over.key.startsWith('edge:') && !isBonusRow(over.key)) continue
     for (let index = 0; index + 1 < over.points.length; index += 1) {
       const [a, b] = [over.points[index]!, over.points[index + 1]!]
       if (a.y !== b.y || a.x === b.x) continue

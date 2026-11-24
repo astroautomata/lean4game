@@ -276,6 +276,7 @@ export function VisualPathMap({ gameInfo, openAnyLevel, fullComplete = false, hi
     worlds: Object.fromEntries(Object.entries(nodesById ?? {}).map(([world, node]) => [world, {
       title: node.title,
       bonusOf: node.visualBonusOf,
+      bonusSide: node.visualBonusSide,
       // Where the neutral palette isn't drawn, a scheme's world has a plain colour.
       color: neutral ? node.visualColor : CLASSIC_COLOR_OF_SCHEME[node.visualColor ?? ''] ?? node.visualColor,
       column: node.visualMapColumn,

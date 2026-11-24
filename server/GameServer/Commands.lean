@@ -366,6 +366,15 @@ elab "VisualBonusOf" source:ident level:num : command => do
   modifyCurWorld fun world => pure { world with
     visualBonusOf? := some (source.getId, level.getNat) }
 
+/-- Path map: the side the levels of a bonus world (`VisualBonusOf`) sprout off to,
+`left` or `right`. Without it they go away from the centre of the map, and to the left
+from the centre column. Use it in the world file. Example: `VisualBonusSide left` -/
+elab "VisualBonusSide" side:ident : command => do
+  let name := side.getId.toString
+  unless name == "left" || name == "right" do
+    throwError "VisualBonusSide takes `left` or `right`"
+  modifyCurWorld fun world => pure { world with visualBonusSide? := some name }
+
 /-- Path map: colour of the current world's path, one of `purple`, `blue`, `sky`,
 `teal`, `green`, `amber`, `orange`, `red`, `pink`, `indigo`, `lime` and `grey`, or one of
 the schemes `lantern`, `aqueduct`, `signal`, `blossom`, `riverside`, `sandstone`,

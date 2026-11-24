@@ -167,6 +167,7 @@ macro "VisualNumberedSplits" : command => `(command| set_option linter.unusedVar
 macro "VisualContinues" ident : command => `(command| set_option linter.unusedVariables false)
 macro "VisualPathMap" : command => `(command| set_option linter.unusedVariables false)
 macro "VisualBonusOf" ident num : command => `(command| set_option linter.unusedVariables false)
+macro "VisualBonusSide" ident : command => `(command| set_option linter.unusedVariables false)
 macro "VisualWorldColor" ident : command => `(command| set_option linter.unusedVariables false)
 syntax visualMapColumnArg := ("-")? num
 macro "VisualMapColumn" visualMapColumnArg : command =>

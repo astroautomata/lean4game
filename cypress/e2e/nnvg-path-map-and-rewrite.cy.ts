@@ -450,23 +450,23 @@ describe('Natural Numbers Video Game', () => {
       'edge:Induction:InductionJoined:in',
       'edge:NeqJoined:InductionJoined:in',
       'edge:InductionJoined:InductionDouble:in',
-      // ≤ World follows the ≠ World, and waits for Induction World twice.
+      // ≤ World follows the ≠ World, and waits for all of Induction World at its level 6.
       'edge:NeqJoined:LessOrEqual:in',
       'edge:LessOrEqual:LessOrEqualJoined:in',
-      'edge:InductionJoined:LessOrEqualJoined:in',
+      'edge:InductionDouble:LessOrEqualJoined:in',
       'edge:LessOrEqualJoined:LessOrEqualBoss:in',
-      'edge:InductionDouble:LessOrEqualBoss:in',
       'edge:LessOrEqualBoss:AdvMultiplication:in',
       'edge:Multiplication:AdvMultiplication:in',
       // Logic World follows two bonus branches and the ≠ World.
       'edge:PropositionBonusB:Logic:in',
       'edge:PropositionBonusC:Logic:in',
       'edge:NeqJoined:Logic:in',
-      // The End is joined by the final bosses of three worlds.
+      // The End is joined by the final bosses of two worlds.
       'edge:Power:Outro:in',
       'edge:AdvMultiplication:Outro:in',
-      'edge:Logic:Outro:in',
       'bonus:Power:9:PowerBonus',
+      // ≤ World's boss has a row of bonus levels.
+      'bonus:LessOrEqualBoss:1:LessOrEqualBonus',
       // Two bonuses leave Rewrite World's level 2, neither needing the other.
       'bonus:Rewrite:3:RewriteBonus',
       'bonus:Rewrite:3:RewriteBonusB',
@@ -479,18 +479,21 @@ describe('Natural Numbers Video Game', () => {
     }
     cy.get('[data-segment="edge:Power:AdvMultiplication:in"]').should('not.exist')
     cy.get('[data-segment="edge:NeqJoined:Outro:in"]').should('not.exist')
-    // Multiplication World's path comes across to the middle column and runs down it,
-    // over the path out of Induction World's last level, which it bridges twice. The
-    // path from ≤ World's boss to the bonus boss about Fermat crosses the whole map,
-    // over that middle column and over the levels about powers.
-    cy.get('[data-testid="path-map-bridge"]').should('have.length', 4)
-    cy.get('[data-segment="edge:LessOrEqualBoss:PowerBonus:in"]').should('exist')
+    // Logic World leads nowhere, and nothing waits for Induction World's level 7 alone.
+    cy.get('[data-segment="edge:Logic:Outro:in"]').should('not.exist')
+    cy.get('[data-segment="edge:InductionJoined:LessOrEqualJoined:in"]').should('not.exist')
+    // Multiplication and Exponentiation World's path to Advanced Multiplication World
+    // runs down Induction World's column, below that world's last level. The path from
+    // ≤ World's bonus levels to the bonus boss about Fermat crosses it, with a bridge.
+    cy.get('[data-testid="path-map-bridge"]').should('have.length', 1)
+    cy.get('[data-segment="edge:LessOrEqualBonus:PowerBonus:in"]').should('exist')
+    cy.get('[data-segment="edge:LessOrEqualBoss:PowerBonus:in"]').should('not.exist')
     // Successor World has no bonus levels.
     cy.get('[data-segment^="bonus:Successor"]').should('not.exist')
     // Numbering restarts per stream, and bonuses are numbered as in the spec.
-    mapLevel('RewriteBonus', 1).should('contain.text', 'A1')
-    mapLevel('RewriteBonus', 2).should('contain.text', 'A2')
-    mapLevel('RewriteBonusB', 1).should('contain.text', 'B1')
+    mapLevel('RewriteBonus', 1).should('contain.text', 'A0')
+    mapLevel('RewriteBonus', 2).should('contain.text', 'A1')
+    mapLevel('RewriteBonusB', 1).should('contain.text', 'B0')
     // The path's next levels are listed beside the branches, one row each.
     const top = (world: string, n: number) =>
       Cypress.$(`[data-testid="path-map-level"][data-world="${world}"][data-level="${n}"]`)[0]!.getBoundingClientRect().top
@@ -513,9 +516,8 @@ describe('Natural Numbers Video Game', () => {
       Number(/^M\s*(-?[\d.]+)/u.exec(Cypress.$(`[data-segment="${segment}"]`).attr('d')!)![1])
     for (const [world, n, first, second] of [
       ['Rewrite', 3, 'RewriteBonus', 'RewriteBonusB'],
-      // Both of these lead on to Logic World, so the longer one, C, is listed first:
-      // each one's path onwards then drops clear of the other's levels.
-      ['PropositionRight', 8, 'PropositionBonusC', 'PropositionBonusB'],
+      // Both of these lead on to Logic World, and the longer one, B, is listed first.
+      ['PropositionRight', 8, 'PropositionBonusB', 'PropositionBonusC'],
     ] as const) {
       mapLevel(world, n).find('circle').then($anchor => {
         const anchorX = Number($anchor.attr('cx'))
@@ -532,19 +534,21 @@ describe('Natural Numbers Video Game', () => {
       expect(y1, 'and leaves it level').to.equal(y0)
       expect(x1, 'to the side').not.to.equal(x0)
     })
-    mapLevel('PropositionBonusB', 1).should('contain.text', 'B1')
-    mapLevel('PropositionBonusC', 1).should('contain.text', 'C1')
-    mapLevel('PropositionBonusC', 3).should('contain.text', 'C3')
+    mapLevel('PropositionBonusB', 1).should('contain.text', 'B0')
+    mapLevel('PropositionBonusB', 3).should('contain.text', 'B2')
+    mapLevel('PropositionBonusC', 1).should('contain.text', 'C0')
     mapLevel('Proposition', 7).should('contain.text', '6')
     mapLevel('Proposition', 8).should('contain.text', '7')
     mapLevel('PropositionRight', 1).should('contain.text', '8')
     mapLevel('PropositionRight', 7).should('contain.text', '14')
     mapLevel('PropositionRight', 8).should('contain.text', '15')
-    mapLevel('PropositionBonus', 1).should('contain.text', 'A1')
-    // The LEM branch is B1 alone.
-    mapLevel('PropositionBonusB', 2).should('not.exist')
-    mapLevel('SuccessorJoined', 1).should('contain.text', '4')
-    mapLevel('SuccessorJoined', 3).should('contain.text', '6')
+    mapLevel('PropositionBonus', 1).should('contain.text', 'A0')
+    // The LEM branch is C0 alone.
+    mapLevel('PropositionBonusC', 2).should('not.exist')
+    // Successor World counts from zero too, across its barrier.
+    mapLevel('Successor', 1).should('contain.text', '0')
+    mapLevel('SuccessorJoined', 1).should('contain.text', '3')
+    mapLevel('SuccessorJoined', 3).should('contain.text', '5')
     mapLevel('Neq', 1).should('contain.text', '0')
     mapLevel('Neq', 9).should('contain.text', '8')
     mapLevel('NeqJoined', 1).should('contain.text', '9')
@@ -563,8 +567,10 @@ describe('Natural Numbers Video Game', () => {
     mapLevel('AdvMultiplication', 1).should('contain.text', '0')
     mapLevel('AdvMultiplication', 10).should('contain.text', '9')
     mapLevel('LessOrEqualBoss', 1).should('contain.text', '10')
-    mapLevel('Logic', 1).should('contain.text', '0')
-    mapLevel('PowerBonus', 1).should('contain.text', 'A1')
+    mapLevel('Logic', 1).should('contain.text', 'A0')
+    mapLevel('PowerBonus', 1).should('contain.text', 'A0')
+    mapLevel('LessOrEqualBonus', 1).should('contain.text', 'A0')
+    mapLevel('LessOrEqualBonus', 4).should('contain.text', 'A3')
     mapLevel('Outro', 1).should('have.attr', 'data-text-level', 'true')
     // The barrier: nothing leads past Successor World's boss yet.
     mapLevel('SuccessorJoined', 1).should('have.attr', 'data-state', 'locked')
@@ -578,7 +584,7 @@ describe('Natural Numbers Video Game', () => {
         .getBoundingClientRect()
       return { x: box.left + box.width / 2, y: box.top + box.height / 2 }
     }
-    cy.get('[data-testid="path-map-level"]').should('have.length', 98).then($levels => {
+    cy.get('[data-testid="path-map-level"]').should('have.length', 102).then($levels => {
       // ≤ World carries on below the ≠ World's boss on the right, in three stretches,
       // and Advanced Multiplication World below it.
       expect(centre('LessOrEqual', 1).x).to.be.closeTo(centre('NeqJoined', 1).x, 1)
@@ -588,14 +594,26 @@ describe('Natural Numbers Video Game', () => {
       expect(centre('AdvMultiplication', 1).x).to.be.closeTo(centre('LessOrEqualBoss', 1).x, 1)
       expect(centre('AdvMultiplication', 1).y).to.be.greaterThan(centre('LessOrEqualBoss', 1).y)
       // Induction World carries on down its own column, below the ≠ World's boss, and
-      // its levels 7 and 9 are above the ≤ World levels that wait for them (6 and 10).
+      // its last level is above ≤ World's level 6, which waits for it.
       expect(centre('InductionJoined', 1).x).to.be.closeTo(centre('Induction', 4).x, 1)
       expect(centre('InductionJoined', 1).y).to.be.greaterThan(centre('NeqJoined', 1).y)
-      expect(centre('InductionJoined', 4).y).to.be.lessThan(centre('LessOrEqualJoined', 1).y)
-      expect(centre('InductionDouble', 2).y).to.be.lessThan(centre('LessOrEqualBoss', 1).y)
-      // Logic World is to the right of ≤ World, below the bonus branches it follows.
-      expect(centre('Logic', 1).x).to.be.greaterThan(centre('LessOrEqual', 1).x + 50)
-      expect(centre('Logic', 1).y).to.be.greaterThan(centre('PropositionBonusB', 1).y)
+      expect(centre('InductionDouble', 2).y).to.be.lessThan(centre('LessOrEqualJoined', 1).y)
+      // Logic World is two columns to the right of ≤ World, below the bonus branches it
+      // follows: between the last level of the lower one (C) and that of the upper (B),
+      // whose paths join above it.
+      expect(centre('Logic', 1).x).to.be.greaterThan(centre('LessOrEqual', 1).x + 100)
+      expect(centre('Logic', 1).y).to.be.greaterThan(centre('PropositionBonusC', 1).y)
+      expect(centre('Logic', 1).x).to.be.greaterThan(centre('PropositionBonusC', 1).x)
+      expect(centre('Logic', 1).x).to.be.lessThan(centre('PropositionBonusB', 3).x)
+      // ≤ World's bonus levels go left from below its boss, towards the middle, and
+      // the bonus about Fermat goes right from below the last level about powers: it is
+      // further left and lower than the last of them, whose row the path to it carries on.
+      expect(centre('PowerBonus', 1).x).to.be.lessThan(centre('LessOrEqualBonus', 4).x - 20)
+      expect(centre('PowerBonus', 1).y).to.be.greaterThan(centre('LessOrEqualBonus', 4).y + 20)
+      expect(centre('LessOrEqualBonus', 1).x).to.be.lessThan(centre('LessOrEqualBoss', 1).x - 20)
+      expect(centre('LessOrEqualBonus', 4).x).to.be.lessThan(centre('LessOrEqualBonus', 1).x - 100)
+      expect(centre('LessOrEqualBonus', 4).y).to.be.closeTo(centre('LessOrEqualBonus', 1).y, 1)
+      expect(centre('PowerBonus', 1).x).to.be.greaterThan(centre('Power', 9).x + 20)
       // The levels about powers carry on below those about multiplication, on the far left.
       expect(centre('Power', 1).x).to.be.closeTo(centre('Multiplication', 8).x, 1)
       expect(centre('Multiplication', 1).x).to.be.lessThan(centre('Induction', 1).x - 50)
@@ -646,16 +664,17 @@ describe('Natural Numbers Video Game', () => {
     })
     // Multiplication and Exponentiation World's title is long, so it is on two lines,
     // and fits above its column like the others. Advanced Multiplication World's is to
-    // the left of its path, just above its first level: the other world's path turns in
-    // above it, and Logic World's path to The End runs down its right. ≤ World's is to the
-    // right of the path from the ≠ World's boss, which forks to both sides just above it.
+    // the right of its path, just above its first level: the other world's path turns in
+    // above it from the left. ≤ World's is to the right of the path from the ≠ World's
+    // boss, which forks to both sides just above it, and Logic World's is to the right of
+    // the path that comes down to it from the bonus branches.
     const titleOf = (text: string) => cy.get(`[data-testid="path-map-world-label"][data-title="${text}"]`)
     titleOf('Multiplication and Exponentiation World').should('have.attr', 'data-anchor', 'middle')
       .find('tspan').should('have.length', 2)
-    titleOf('Advanced Multiplication World').should('have.attr', 'data-anchor', 'end')
+    titleOf('Advanced Multiplication World').should('have.attr', 'data-anchor', 'start')
       .find('tspan').should('have.length', 1)
     titleOf('≤ World').should('have.attr', 'data-anchor', 'start')
-    titleOf('Logic World').should('have.attr', 'data-anchor', 'middle')
+    titleOf('Logic World').should('have.attr', 'data-anchor', 'start')
     titleOf('Rewrite World').should('have.attr', 'data-anchor', 'middle')
   })
 
@@ -691,7 +710,9 @@ describe('Natural Numbers Video Game', () => {
       ['AdvMultiplication', 5, 'le_mul_right'],
       ['LessOrEqualJoined', 1, 'Nothing Smaller than Zero'],
       ['LessOrEqualJoined', 2, '≤ Add Right Cancel'],
-      ['LessOrEqualJoined', 3, 'Antisymmetry'],
+      ['LessOrEqualJoined', 3, 'Antisymmetry of ≤'],
+      ['LessOrEqual', 6, 'Transitivity of ≤'],
+      ['LessOrEqualBonus', 4, 'Trichotomy'],
       ['Logic', 1, 'Double Elimination is Equivalent To LEM'],
       ['Outro', 1, 'The End'],
     ] as const) {
@@ -700,7 +721,7 @@ describe('Natural Numbers Video Game', () => {
     }
     // A bonus level that waits for a world besides the one it branches off says which,
     // as well as having a path from there.
-    tooltipOf('PowerBonus', 1).should('have.text', "🔒 Refute Fermat's Last Theorem? (needs ≤ World)")
+    tooltipOf('PowerBonus', 1).should('have.text', "🔒 Refute Fermat's Last Theorem? (needs ≤ World Bonus)")
     leave('PowerBonus', 1)
     tooltipOf('RewriteBonus', 1).should('have.text', '🔒 Fast Rewriting')
     leave('RewriteBonus', 1)
@@ -717,46 +738,47 @@ describe('Natural Numbers Video Game', () => {
     })
   })
 
-  it('opens The End once the three bosses before it are done', () => {
+  it('opens The End once the two bosses before it are done, and Logic World after its two bonus branches', () => {
     visit(MAP, { fresh: true })
     mapLevel('Outro', 1).should('have.attr', 'data-state', 'locked')
-    // Everything The End follows but Logic World: it stays locked, with two of its paths lit.
     const done = {
       Intro: 1, Rewrite: 6, Proposition: 8, PropositionRight: 8, Successor: 3, SuccessorJoined: 3, Induction: 4,
       Neq: 9, NeqJoined: 1, InductionJoined: 4, InductionDouble: 2, Multiplication: 8, Power: 9,
       LessOrEqual: 6, LessOrEqualJoined: 4, LessOrEqualBoss: 1, AdvMultiplication: 10,
     }
-    // The bonus boss off the last level about powers waits for ≤ World as well.
-    visitWithProgress({ ...done, LessOrEqualBoss: 0, AdvMultiplication: 0 })
+    // The bonus boss off the last level about powers waits for ≤ World's bonus levels
+    // as well.
+    visitWithProgress({ ...done, LessOrEqualBonus: 3 })
     mapLevel('Power', 9).should('have.attr', 'data-state', 'completed')
     mapLevel('PowerBonus', 1).should('have.attr', 'data-state', 'locked')
     cy.get('[data-segment="bonus:Power:9:PowerBonus"]').should('have.attr', 'data-lit', 'true')
-    cy.get('[data-segment="edge:LessOrEqualBoss:PowerBonus:in"]').should('have.attr', 'data-lit', 'false')
-    visitWithProgress(done)
+    cy.get('[data-segment="edge:LessOrEqualBonus:PowerBonus:in"]').should('have.attr', 'data-lit', 'false')
+    visitWithProgress({ ...done, LessOrEqualBonus: 4 })
     mapLevel('PowerBonus', 1).should('have.attr', 'data-state', 'frontier')
-    cy.get('[data-segment="edge:LessOrEqualBoss:PowerBonus:in"]').should('have.attr', 'data-lit', 'true')
-    mapLevel('Outro', 1).should('have.attr', 'data-state', 'locked')
-    cy.get('[data-segment="edge:Power:Outro:in"]').should('have.attr', 'data-lit', 'true')
-    cy.get('[data-segment="edge:AdvMultiplication:Outro:in"]').should('have.attr', 'data-lit', 'true')
-    cy.get('[data-segment="edge:Logic:Outro:in"]').should('have.attr', 'data-lit', 'false')
-    // Induction World's last level alone doesn't lead there: its path goes on to ≤ World.
-    cy.get('[data-segment="edge:InductionDouble:LessOrEqualBoss:in"]').should('have.attr', 'data-lit', 'true')
-    // Logic World waits for both bonus branches off Proposition World's boss.
+    cy.get('[data-segment="edge:LessOrEqualBonus:PowerBonus:in"]').should('have.attr', 'data-lit', 'true')
+    visitWithProgress(done)
+    // ≤ World's bonus levels open with its boss.
+    mapLevel('LessOrEqualBonus', 1).should('have.attr', 'data-state', 'frontier')
+    mapLevel('LessOrEqualBonus', 2).should('have.attr', 'data-state', 'locked')
+    // Induction World's last level leads on to ≤ World's level 6.
+    cy.get('[data-segment="edge:InductionDouble:LessOrEqualJoined:in"]').should('have.attr', 'data-lit', 'true')
+    // Logic World waits for both bonus branches off Proposition World's boss, and The
+    // End doesn't wait for Logic World.
     mapLevel('Logic', 1).should('have.attr', 'data-state', 'locked')
     cy.get('[data-segment="edge:NeqJoined:Logic:in"]').should('have.attr', 'data-lit', 'true')
-    visitWithProgress({ ...done, PropositionBonusB: 1 })
+    mapLevel('Outro', 1).should('have.attr', 'data-state', 'frontier')
+    visitWithProgress({ ...done, PropositionBonusC: 1 })
     mapLevel('Logic', 1).should('have.attr', 'data-state', 'locked')
-    visitWithProgress({ ...done, PropositionBonusB: 1, PropositionBonusC: 3 })
+    visitWithProgress({ ...done, PropositionBonusB: 3, PropositionBonusC: 1 })
     mapLevel('Logic', 1).should('have.attr', 'data-state', 'frontier')
-    mapLevel('Outro', 1).should('have.attr', 'data-state', 'locked')
-    // Without Advanced Multiplication World's boss it stays locked too.
-    const logic = { PropositionBonusB: 1, PropositionBonusC: 3, Logic: 1 }
-    visitWithProgress({ ...done, ...logic, AdvMultiplication: 9 })
+    // Without Advanced Multiplication World's boss The End stays locked.
+    visitWithProgress({ ...done, AdvMultiplication: 9 })
     mapLevel('Outro', 1).should('have.attr', 'data-state', 'locked')
     cy.get('[data-segment="edge:AdvMultiplication:Outro:in"]').should('have.attr', 'data-lit', 'false')
-    visitWithProgress({ ...done, ...logic })
+    cy.get('[data-segment="edge:Power:Outro:in"]').should('have.attr', 'data-lit', 'true')
+    visitWithProgress(done)
     // The map is drawn once the level data is in, which takes a moment after a visit.
-    cy.get('[data-segment="edge:Logic:Outro:in"]', { timeout: LOAD_TIMEOUT }).should('have.attr', 'data-lit', 'true')
+    cy.get('[data-segment="edge:AdvMultiplication:Outro:in"]', { timeout: LOAD_TIMEOUT }).should('have.attr', 'data-lit', 'true')
     mapLevel('Outro', 1).should('have.attr', 'data-state', 'frontier').click()
     cy.get('[data-testid="text-level-dialog"]').should('be.visible').and('contain.text', 'Thank you for playing!')
     cy.contains('.path-map-text-close', 'Continue').click()
@@ -1438,8 +1460,8 @@ describe('Natural Numbers Video Game', () => {
   })
 
   it('plays the other De Morgan’s law, leftwards', () => {
-    openCanvasLevel('PropositionBonusC', 1)
-    headerShouldNameLevel('C1', 'The Other De Morgan')
+    openCanvasLevel('PropositionBonusB', 1)
+    headerShouldNameLevel('B0', 'The Other De Morgan')
     goalHintShouldContain('intuitionistically valid')
     goalShouldBe('¬A ∨ ¬B → ¬(A ∧ B)')
     clickGoal()
@@ -1463,8 +1485,8 @@ describe('Natural Numbers Video Game', () => {
   })
 
   it('plays the other De Morgan’s law, rightwards with excluded middle', () => {
-    openCanvasLevel('PropositionBonusC', 2)
-    headerShouldNameLevel('C2', 'Law of Excluded Middle')
+    openCanvasLevel('PropositionBonusB', 2)
+    headerShouldNameLevel('B1', 'Law of Excluded Middle')
     goalHintShouldContain('not intuitionistically valid')
     goalHintShouldContain('∀ P, P ∨ ¬P')
     // hA, hB, and the cards for `A B : Prop`.
@@ -1502,8 +1524,8 @@ describe('Natural Numbers Video Game', () => {
   })
 
   it('plays the other De Morgan’s law, rightwards with weak excluded middle', () => {
-    openCanvasLevel('PropositionBonusC', 3)
-    headerShouldNameLevel('C3', 'Weak Law of Excluded Middle')
+    openCanvasLevel('PropositionBonusB', 3)
+    headerShouldNameLevel('B2', 'Weak Law of Excluded Middle')
     // A title this long gets its own line, and all of it shows.
     cy.get('.visual-header-title').filter(':visible').first().should($title => {
       expect($title[0]!.scrollWidth).to.be.at.most($title[0]!.clientWidth + 1)
@@ -1544,9 +1566,9 @@ describe('Natural Numbers Video Game', () => {
     shouldBeCompleted()
   })
 
-  it('plays ¬¬LEM, bonus B1: the hypothesis proves `False` backwards, twice', () => {
-    openCanvasLevel('PropositionBonusB', 1)
-    headerShouldNameLevel('B1', '¬¬LEM')
+  it('plays ¬¬LEM, bonus C0: the hypothesis proves `False` backwards, twice', () => {
+    openCanvasLevel('PropositionBonusC', 1)
+    headerShouldNameLevel('C0', '¬¬LEM')
     goalHintShouldContain("It's not possible to prove the Law of Excluded Middle")
     goalHintShouldContain('∀ P, P ∨ ¬P')
     cy.contains('em', 'refute').should('be.visible')
@@ -1855,7 +1877,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('plays Successor World with S, in axiom colours', () => {
     openRewriteLevel(1, 'Successor')
-    headerShouldNameLevel('1', 'Counting to Two')
+    headerShouldNameLevel('0', 'Counting to Two')
     lessonsShouldContain('‘successor function’')
     relationShouldBe('S(S(0)) = 2')
     cy.get('.tr-rule-card[data-rule-label="one_eq_succ_zero"]').filter(':visible').first()
@@ -1874,7 +1896,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('proves the theorem level with the axioms', () => {
     openRewriteLevel(2, 'Successor')
-    headerShouldNameLevel('2', 'add_succ')
+    headerShouldNameLevel('1', 'add_succ')
     lessonsShouldContain('from only the axioms below (and induction)')
     relationShouldBe('a + 1 = S(a)')
     cy.get('.tr-rule-card[data-rule-label="add_zero"]').should('have.attr', 'data-rule-axiom', 'true')
@@ -1901,7 +1923,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('offers the proved theorem, not in the axiom colour, in the Successor World boss', () => {
     openRewriteLevel(3, 'Successor')
-    headerShouldNameLevel('3', 'Counting to Four')
+    headerShouldNameLevel('2', 'Counting to Four')
     lessonsShouldContain('‘theorem’ levels')
     // The level opens on the + tab, which holds the theorem next to the two axioms.
     cy.contains('.tr-tab-btn', 'Axioms').should('not.exist')
@@ -1929,7 +1951,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('crosses the beams (0): Rewriting Mode on the goal, with `hx` as a rule', () => {
     openCanvasLevel('SuccessorJoined', 1)
-    headerShouldNameLevel('4', 'Crossing the Beams (0)')
+    headerShouldNameLevel('3', 'Crossing the Beams (0)')
     cy.get('[data-testid="hyp-card"][data-hyp-type="ℕ"]').should('exist')
     goalShouldBe('x + 1 = 2')
     goalHintShouldContain('We will now put Rewriting Mode and Proposition Mode together!')
@@ -1964,7 +1986,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('crosses the beams (1): Rewriting Mode on a hypothesis, then back to the canvas', () => {
     openCanvasLevel('SuccessorJoined', 2)
-    headerShouldNameLevel('5', 'Crossing the Beams (1)')
+    headerShouldNameLevel('4', 'Crossing the Beams (1)')
     goalShouldBe('y = 0')
     hintShouldContain('We can also enter hypotheses in Rewriting Mode.')
 
@@ -2002,7 +2024,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('opens the Successor World boss with its three hypotheses and a hidden hint', () => {
     openCanvasLevel('SuccessorJoined', 3)
-    headerShouldNameLevel('6', 'Plug and Chug')
+    headerShouldNameLevel('5', 'Plug and Chug')
     goalShouldBe('c + c + c + c = 4')
     for (const name of ['ha', 'hb', 'hc']) hypShouldExist(name)
     goalHintShouldContain('Hint:')
@@ -2465,7 +2487,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('refutes a careless statement of Fermat in the bonus off the last boss', () => {
     openCanvasLevel('PowerBonus', 1)
-    headerShouldNameLevel('A1', "Refute Fermat's Last Theorem?")
+    headerShouldNameLevel('A0', "Refute Fermat's Last Theorem?")
     goalShouldBe('(∀ (a b c n : ℕ), n > 2 → a ^ n + b ^ n ≠ c ^ n) → False')
     clickGoal()
     goalShouldBe('False')
@@ -2526,6 +2548,45 @@ describe('Natural Numbers Video Game', () => {
     shouldBeCompleted()
   })
 
+  it('plays the first of ≤ World\u2019s bonus levels: `>` is a `¬`, so a click assumes the `≤`', () => {
+    openCanvasLevel('LessOrEqualBonus', 1)
+    headerShouldNameLevel('A0', '>')
+    goalShouldBe('∀ (a : ℕ), S a > a')
+    goalHintShouldContain('We define')
+    // No `cases` and no `induction` here.
+    cy.contains('.theorem-tray-panel button', 'Tactics').click()
+    cy.get('[data-testid="tactic-uses"][data-tactic-name="induction"]').filter(':visible').should('have.text', 'x0')
+    cy.get('[data-testid="tactic-uses"][data-tactic-name="cases"]').filter(':visible').should('have.text', 'x0')
+    clickGoal()
+    goalShouldBe('S a > a')
+    clickGoal()
+    goalShouldBe('False')
+    cy.get('[data-testid="hyp-card"][data-hyp-name="h"]').should('have.attr', 'data-hyp-type', 'S(a) ≤ a')
+    clickHyp('h')
+    hypShouldExist('c1')
+    const play = (tactic: string, expected: string) => {
+      harness(h => h.runPlayerTactic(tactic))
+      cy.get(`[data-testid="hyp-card"][data-hyp-type="${expected}"]`, { timeout: LOAD_TIMEOUT }).should('exist')
+    }
+    cy.get('[data-testid="hyp-card"][data-hyp-type="a = S(a) + c1"]').should('have.attr', 'data-hyp-name', 'h1')
+    play('drag_rw_hyp_rhs h1 [MyNat.succ_add]', 'a = S(a + c1)')
+    play('drag_rw_hyp_rhs h1 [← MyNat.add_succ]', 'a = a + S(c1)')
+    play('symm at h1', 'a + S(c1) = a')
+    harness(h => h.dragTheoremToHyp('MyNat.add_right_eq_self', 'h1'))
+    hypShouldExist('thm_add_right_eq_self')
+    play('symm at thm_add_right_eq_self', '0 = S(c1)')
+    harness(h => h.dragTheoremToHyp('MyNat.zero_ne_succ', 'thm_add_right_eq_self'))
+    hypShouldExist('thm_zero_ne_succ')
+    dragToGoal('thm_zero_ne_succ')
+    shouldBeCompleted()
+    // The next level has the theorem this one proved.
+    openCanvasLevel('LessOrEqualBonus', 2)
+    headerShouldNameLevel('A1', 'Irreflexivity of >')
+    goalShouldBe('∀ (a : ℕ), ¬a > a')
+    cy.get('[data-testid="theorem-tray-card"]', { timeout: LOAD_TIMEOUT }).should('have.length.greaterThan', 0)
+    trayShouldHaveCard('lt_succ_self', true)
+  })
+
   it('opens ≤ World with a witness to build: a hint for the right one, and one for any other', () => {
     const opening = 'propose some ‘witness’'
     const wrong = 'We won’t be able to solve the goal with that witness.'
@@ -2582,7 +2643,7 @@ describe('Natural Numbers Video Game', () => {
     hintShouldContain('hypothesis to create a witness')
 
     openCanvasLevel('LessOrEqual', 6)
-    headerShouldNameLevel('5', 'Transitivity')
+    headerShouldNameLevel('5', 'Transitivity of ≤')
     goalShouldBe('x ≤ z')
     cy.contains('there-exists hypotheses').should('not.exist')
     cy.get('[data-testid="goal-card"]').filter(':visible').first().find('.statement-atomic-form')
@@ -2666,7 +2727,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('plays Logic World in its own colours', () => {
     openCanvasLevel('Logic', 1)
-    headerShouldNameLevel('0', 'Double Elimination is Equivalent To LEM')
+    headerShouldNameLevel('A0', 'Double Elimination is Equivalent To LEM')
     goalShouldBe('(∀ (P : Prop), P ∨ ¬P) ↔ ∀ (P : Prop), ¬¬P → P')
     cy.get('.app').should('have.attr', 'data-world-scheme', 'frost')
     cy.document().its('documentElement').should(html => {
@@ -2679,7 +2740,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('plays the bonus off Proposition World level 9 on the canvas', () => {
     openCanvasLevel('PropositionBonus', 1)
-    headerShouldNameLevel('A1', 'Many Such Cases')
+    headerShouldNameLevel('A0', 'Many Such Cases')
     clickGoal()
     goalShouldBe('B ∨ (A → C) → A ∧ B ∨ (A ∨ B → C)')
     clickGoal()
@@ -2937,9 +2998,9 @@ describe('Natural Numbers Video Game', () => {
     cy.contains('double-clicking the goal').should('not.exist')
   })
 
-  it('plays Fast Reversing, bonus A2: a right-click swaps the direction, a swipe sets it', () => {
+  it('plays Fast Reversing, bonus A1: a right-click swaps the direction, a swipe sets it', () => {
     openRewriteLevel(2, 'RewriteBonus')
-    headerShouldNameLevel('A2', 'Fast Reversing')
+    headerShouldNameLevel('A1', 'Fast Reversing')
     lessonsShouldContain('right-click anywhere on the lower menu')
     relationShouldBe('(((a + b) + a) + b) + a = a')
     const reversed = (expected: boolean) =>
@@ -2988,9 +3049,9 @@ describe('Natural Numbers Video Game', () => {
     })
   })
 
-  it('plays Fast Rewriting, bonus A1, with seven clicks', () => {
+  it('plays Fast Rewriting, bonus A0, with seven clicks', () => {
     openRewriteLevel(1, 'RewriteBonus')
-    headerShouldNameLevel('A1', 'Fast Rewriting')
+    headerShouldNameLevel('A0', 'Fast Rewriting')
     lessonsShouldContain('you can also click them')
     const sum = (zeros: number): string => zeros === 1 ? '0' : zeros === 2 ? '0 + 0' : `(${sum(zeros - 1)}) + 0`
     relationShouldBe(`${sum(8)} = 0`)
@@ -3002,9 +3063,9 @@ describe('Natural Numbers Video Game', () => {
     shouldBeCompleted()
   })
 
-  it('opens Fixed Point as bonus B1', () => {
+  it('opens Fixed Point as bonus B0', () => {
     openRewriteLevel(1, 'RewriteBonusB')
-    headerShouldNameLevel('B1', 'Fixed Point')
+    headerShouldNameLevel('B0', 'Fixed Point')
     relationShouldBe('f(x) = 0')
   })
 

@@ -546,6 +546,9 @@ structure World where
   /-- Visual Lean path map: this world is a bonus branch sprouting from the given
   level of another world. It unlocks once that level is done and gates nothing. -/
   visualBonusOf? : Option (Name × Nat) := none
+  /-- Visual Lean path map: the side a bonus world's levels sprout off to, `left` or
+  `right` (see `VisualBonusSide`). Away from the centre when unset. -/
+  visualBonusSide? : Option String := none
   /-- Visual Lean path map: named colour of this world's path. -/
   visualColor? : Option String := none
   /-- Visual Lean path map: column of this world's path (0 = centre, negative = left).
@@ -578,6 +581,9 @@ instance : ToJson World := ⟨
     (match world.visualBonusOf? with
       | some (source, level) =>
         [("visualBonusOf", Json.mkObj [("world", toJson source), ("level", toJson level)])]
+      | none => []) ++
+    (match world.visualBonusSide? with
+      | some side => [("visualBonusSide", toJson side)]
       | none => []) ++
     (match world.visualColor? with
       | some color => [("visualColor", toJson color)]
@@ -732,6 +738,7 @@ def World.merge (old : World) (new : World) : World :=
   -- Level modules carry the world without its world-level settings, so keep
   -- settings that were made in another module.
   visualBonusOf? := new.visualBonusOf? <|> old.visualBonusOf?
+  visualBonusSide? := new.visualBonusSide? <|> old.visualBonusSide?
   visualColor? := new.visualColor? <|> old.visualColor?
   visualMapColumn? := new.visualMapColumn? <|> old.visualMapColumn?
   visualSharedPath := new.visualSharedPath || old.visualSharedPath

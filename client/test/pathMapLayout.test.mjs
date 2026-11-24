@@ -939,3 +939,100 @@ test('a path leads into a bonus world from a world it waits for besides the one 
   // ≤ World's second part starts at its level 6 now, below Induction World's level 7.
   assert.ok(node(layout, 'LessOrEqualJoined', 1).y > node(layout, 'InductionJoined', 4).y)
 })
+
+// The map since the 2026-11-24 spec pull's V12.1 note: Proposition World's last bonus
+// branches (B has three levels now, C one) join into one path down Logic World's
+// column, which is a column further right and leads nowhere; ≤ World waits for all of
+// Induction World at its level 6 and has four bonus levels sent to the left off its
+// boss; and the bonus off the last level about powers is sent to the right, and waits
+// for those four bonus levels (not for ≤ World's boss, as in `nnvg9`).
+const nnvg10 = {
+  worlds: {
+    ...nnvg9.worlds,
+    Logic: { ...nnvg9.worlds.Logic, column: 3 },
+    PropositionBonusB: { ...nnvg9.worlds.PropositionBonusB, column: 3 },
+    PropositionBonusC: { ...nnvg9.worlds.PropositionBonusC, column: 3 },
+    PowerBonus: { ...nnvg9.worlds.PowerBonus, bonusSide: 'right' },
+    LessOrEqualBonus: { title: '≤ World Bonus', bonusOf: { world: 'LessOrEqualBoss', level: 1 }, bonusSide: 'left' },
+  },
+  edges: [
+    ...nnvg9.edges.filter(([source, target]) => !(
+      (source === 'Logic' && target === 'Outro') ||
+      (source === 'InductionJoined' && target === 'LessOrEqualJoined') ||
+      (source === 'InductionDouble' && target === 'LessOrEqualBoss') ||
+      (source === 'LessOrEqualBoss' && target === 'PowerBonus'))),
+    ['InductionDouble', 'LessOrEqualJoined'],
+    ['LessOrEqualBoss', 'LessOrEqualBonus'],
+    ['LessOrEqualBonus', 'PowerBonus'],
+  ],
+  worldSize: { ...nnvg9.worldSize, PropositionBonusB: 3, PropositionBonusC: 1, LessOrEqualBonus: 4 },
+}
+
+test('bonus branches that lead to one world and name its column join into one path there', () => {
+  const layout = computePathMapLayout(nnvg10, { defaultColor: 'grey' })
+  assertNoPathOverLevels(layout)
+  const logic = node(layout, 'Logic', 1)
+  assert.equal(logic.x, 3 * PATH_MAP_COLUMN_WIDTH)
+  // The longer row is listed first, so B's last level is above and beyond C's one.
+  const [b, c] = [node(layout, 'PropositionBonusB', 3), node(layout, 'PropositionBonusC', 1)]
+  assert.ok(b.y < c.y)
+  assert.ok(c.x < logic.x && logic.x < b.x)
+  const pathOf = source => [
+    ...segment(layout, `edge:${source}:Logic:out`).points, ...segment(layout, `edge:${source}:Logic:in`).points.slice(1)]
+  // C runs along its row to the lane. B comes down beside its own levels to that row
+  // and runs in from the other side.
+  assert.deepEqual(pathOf('PropositionBonusC').slice(0, 2), [{ x: c.x, y: c.y }, { x: logic.x, y: c.y }])
+  assert.deepEqual(pathOf('PropositionBonusB').slice(0, 3),
+    [{ x: b.x, y: b.y }, { x: b.x, y: c.y }, { x: logic.x, y: c.y }])
+  // From where they meet it is one path, straight down onto Logic World.
+  for (const source of ['PropositionBonusB', 'PropositionBonusC']) {
+    const down = pathOf(source).filter(point => point.y > c.y)
+    assert.ok(down.length > 0 && down.every(point => point.x === logic.x))
+    assert.deepEqual(down.at(-1), { x: logic.x, y: logic.y })
+  }
+  // Logic World leads nowhere, and The End follows the other two.
+  assert.equal(layout.segments.some(s => s.key.startsWith('edge:Logic:')), false)
+  for (const source of ['Power', 'AdvMultiplication']) assert.ok(segment(layout, `edge:${source}:Outro:in`))
+})
+
+test('a bonus row can be sent to either side; across the columns its levels sit between them', () => {
+  const layout = computePathMapLayout(nnvg10, { defaultColor: 'grey' })
+  assertNoPathOverLevels(layout)
+  const boss = node(layout, 'LessOrEqualBoss', 1)
+  // ≤ World is right of the centre, and its bonus levels go left: half a column apart,
+  // a quarter of a column from every column they pass, so that a path coming down a
+  // column runs midway between two of them.
+  const xs = [1, 2, 3, 4].map(n => node(layout, 'LessOrEqualBonus', n).x)
+  assert.deepEqual(xs, [1, 2, 3, 4].map(n => boss.x - (n - 0.5) * PATH_MAP_COLUMN_WIDTH / 2))
+  for (const x of xs) {
+    assert.equal(Math.abs(x - Math.round(x / PATH_MAP_COLUMN_WIDTH) * PATH_MAP_COLUMN_WIDTH), PATH_MAP_COLUMN_WIDTH / 4)
+  }
+  for (const n of [1, 2, 3, 4]) assert.equal(node(layout, 'LessOrEqualBonus', n).y, boss.y + PATH_MAP_ROW_HEIGHT)
+  // The one level off the last level about powers goes right, at a bonus level's usual
+  // distance: it doesn't reach the next column.
+  const [last, fermat] = [node(layout, 'Power', 9), node(layout, 'PowerBonus', 1)]
+  assert.ok(fermat.x > last.x && fermat.x < last.x + PATH_MAP_COLUMN_WIDTH)
+  // It waits for ≤ World's bonus levels, and the path to it carries their row on: out of
+  // the last of them, along to above the level, and down onto it, over the path that
+  // comes down the column in between.
+  const lastBonus = node(layout, 'LessOrEqualBonus', 4)
+  assert.ok(fermat.x < lastBonus.x && fermat.y > lastBonus.y)
+  assert.deepEqual(segment(layout, 'edge:LessOrEqualBonus:PowerBonus:out').points[0], { x: lastBonus.x, y: lastBonus.y })
+  assert.deepEqual(segment(layout, 'edge:LessOrEqualBonus:PowerBonus:in').points.slice(1), [
+    { x: fermat.x, y: lastBonus.y }, { x: fermat.x, y: fermat.y },
+  ])
+  assert.deepEqual(layout.segments.filter(s => s.bridge).map(s => s.key),
+    [`edge:LessOrEqualBonus:PowerBonus:in:bridge:${-PATH_MAP_COLUMN_WIDTH}`])
+  // From a main world such a path turns away below that world's own bonus row.
+  const fromBoss = computePathMapLayout({ ...nnvg10, edges: [
+    ...nnvg10.edges.filter(([source, target]) => !(source === 'LessOrEqualBonus' && target === 'PowerBonus')),
+    ['LessOrEqualBoss', 'PowerBonus'],
+  ] }, { defaultColor: 'grey' })
+  const crossY = boss.y + 1.5 * PATH_MAP_ROW_HEIGHT
+  assert.deepEqual(segment(fromBoss, 'edge:LessOrEqualBoss:PowerBonus:in').points.slice(1), [
+    { x: boss.x, y: crossY }, { x: fermat.x, y: crossY }, { x: fermat.x, y: fermat.y },
+  ])
+  // A bonus row sent outwards is where it always was.
+  const [anchor, rewriteBonus] = [node(layout, 'Rewrite', 3), node(layout, 'RewriteBonus', 1)]
+  assert.ok(rewriteBonus.x < anchor.x)
+})

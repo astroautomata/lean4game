@@ -26,6 +26,8 @@ export interface VisualWorldNode {
   image: string,
   /** Bonus branch off this level of another world (`VisualBonusOf`). */
   visualBonusOf?: { world: string, level: number },
+  /** The side a bonus world's levels sprout off to (`VisualBonusSide`). */
+  visualBonusSide?: 'left' | 'right',
   /** Named path colour (`VisualWorldColor`). */
   visualColor?: string,
   /** Map column: 0 is the centre, negative is left (`VisualMapColumn`). For a bonus
