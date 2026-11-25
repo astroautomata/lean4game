@@ -391,6 +391,8 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
   // Bonus worlds after the worlds they branch off (a bonus of a bonus included):
   // a row of levels going outwards, or to the left from the centre.
   const bonusStep = Math.max(MIN_BONUS_STEP, BONUS_STEP_FRACTION * columnWidth)
+  // The rows laid across the columns: where slot `k` of the row's grid is, and its way.
+  const acrossRows: Record<string, { slotX: (slot: number) => number; side: number }> = {}
   const pendingBonuses = [...bonusWorlds]
   while (pendingBonuses.length > 0) {
     const index = pendingBonuses.findIndex(world => row[bonusOf(world)!.world] !== undefined)
@@ -415,10 +417,33 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     const inward = anchorX !== 0 && side !== Math.sign(anchorX)
     const acrossColumns = inward && levelsOf[world!]!.length * bonusStep > columnWidth - bonusStep / 2 &&
       columnWidth / 2 >= MIN_BONUS_STEP
+    const slotX = (slot: number) => anchorX + side * (slot + (useStem ? 1.5 : 0.5)) * columnWidth / 2
+    if (acrossColumns) acrossRows[world!] = { slotX, side }
     levelX[world!] = Object.fromEntries(levelsOf[world!]!.map((level, levelIndex) =>
-      [level, anchorX + side * (acrossColumns
-        ? (levelIndex + (useStem ? 1.5 : 0.5)) * columnWidth / 2
-        : (levelIndex + 1) * bonusStep + fanShift)]))
+      [level, acrossColumns ? slotX(levelIndex) : anchorX + side * ((levelIndex + 1) * bonusStep + fanShift)]))
+  }
+  // A row across the columns that another bonus level waits for, where that level lies
+  // lower and no more than a column past the row's end: the row's last level moves out
+  // to above it, so the path between them drops straight down, and the levels before
+  // it move as many slots along as leaves half a column before the last one. They stay
+  // a quarter of a column from every column, and the last one is where the level under
+  // it is, which its own world keeps clear of the columns.
+  for (const [source, target] of intoBonusEdges) {
+    const across = acrossRows[source]
+    if (!across || row[target] === undefined) continue
+    const levels = levelsOf[source]!
+    const last = levels.at(-1)!
+    const targetLevel = levelsOf[target]![0]!
+    const targetX = levelX[target]![targetLevel]!
+    const beyond = across.side * (targetX - levelX[source]![last]!)
+    if (beyond <= 0 || beyond > columnWidth || row[target]![targetLevel]! <= row[source]![last]!) continue
+    // Levels of another world that branch off this row would be left behind.
+    if (levels.some(level => branchRows(source, level) > 0)) continue
+    let shift = 0
+    while (across.side * (targetX - across.slotX(levels.length - 2 + shift + 1)) >= columnWidth / 2) shift += 1
+    levels.forEach((level, levelIndex) => {
+      levelX[source]![level] = levelIndex === levels.length - 1 ? targetX : across.slotX(levelIndex + shift)
+    })
   }
   const placed = worldIds.filter(world => row[world] !== undefined)
 
@@ -624,7 +649,17 @@ export function computePathMapLayout(input: PathMapInput, options: PathMapLayout
     const fromLevel = levelsOf[source]!.at(-1)!
     const start = position(source, fromLevel)
     const end = position(target, levelsOf[target]![0]!)
-    if (end.x === start.x) continue
+    if (end.x === start.x) {
+      // The last level of a bonus row right above the level that waits for it: the
+      // path drops straight down.
+      if (bonusOf(source) && end.y > start.y + 2 * PATH_MAP_NODE_RADIUS && !columnBlocked(end.x, start.y, end.y) &&
+          !runsAlong(start, end)) {
+        const change = { x: start.x, y: start.y + PATH_MAP_NODE_RADIUS }
+        pushEdge(source, target, fromLevel, [start, change], [change, end])
+        routed.push([start, end])
+      }
+      continue
+    }
     // From a bonus world, whose levels are a row: where the level it leads to lies
     // further along that row's way and lower, the path carries the row on and turns
     // down onto it.

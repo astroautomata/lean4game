@@ -483,8 +483,9 @@ describe('Natural Numbers Video Game', () => {
     cy.get('[data-segment="edge:Logic:Outro:in"]').should('not.exist')
     cy.get('[data-segment="edge:InductionJoined:LessOrEqualJoined:in"]').should('not.exist')
     // Multiplication and Exponentiation World's path to Advanced Multiplication World
-    // runs down Induction World's column, below that world's last level. The path from
-    // ≤ World's bonus levels to the bonus boss about Fermat crosses it, with a bridge.
+    // runs down Induction World's column, below that world's last level. The row of
+    // ≤ World's bonus levels crosses it, with a bridge, on the way to its last level,
+    // which is right above the bonus boss about Fermat.
     cy.get('[data-testid="path-map-bridge"]').should('have.length', 1)
     cy.get('[data-segment="edge:LessOrEqualBonus:PowerBonus:in"]').should('exist')
     cy.get('[data-segment="edge:LessOrEqualBoss:PowerBonus:in"]').should('not.exist')
@@ -607,9 +608,12 @@ describe('Natural Numbers Video Game', () => {
       expect(centre('Logic', 1).x).to.be.lessThan(centre('PropositionBonusB', 3).x)
       // ≤ World's bonus levels go left from below its boss, towards the middle, and
       // the bonus about Fermat goes right from below the last level about powers: it is
-      // further left and lower than the last of them, whose row the path to it carries on.
-      expect(centre('PowerBonus', 1).x).to.be.lessThan(centre('LessOrEqualBonus', 4).x - 20)
+      // right under the last of them, so the path between the two drops straight down.
+      expect(centre('PowerBonus', 1).x).to.be.closeTo(centre('LessOrEqualBonus', 4).x, 1)
       expect(centre('PowerBonus', 1).y).to.be.greaterThan(centre('LessOrEqualBonus', 4).y + 20)
+      const drop = Cypress.$('[data-segment="edge:LessOrEqualBonus:PowerBonus:in"]')[0]!.getBoundingClientRect()
+      expect(drop.width).to.be.lessThan(drop.height / 4)
+      expect(drop.left + drop.width / 2).to.be.closeTo(centre('PowerBonus', 1).x, 2)
       expect(centre('LessOrEqualBonus', 1).x).to.be.lessThan(centre('LessOrEqualBoss', 1).x - 20)
       expect(centre('LessOrEqualBonus', 4).x).to.be.lessThan(centre('LessOrEqualBonus', 1).x - 100)
       expect(centre('LessOrEqualBonus', 4).y).to.be.closeTo(centre('LessOrEqualBonus', 1).y, 1)
@@ -2551,27 +2555,27 @@ describe('Natural Numbers Video Game', () => {
   it('plays the first of ≤ World\u2019s bonus levels: `>` is a `¬`, so a click assumes the `≤`', () => {
     openCanvasLevel('LessOrEqualBonus', 1)
     headerShouldNameLevel('A0', '>')
-    goalShouldBe('∀ (a : ℕ), S a > a')
+    goalShouldBe('∀ (n : ℕ), S n > n')
     goalHintShouldContain('We define')
     // No `cases` and no `induction` here.
     cy.contains('.theorem-tray-panel button', 'Tactics').click()
     cy.get('[data-testid="tactic-uses"][data-tactic-name="induction"]').filter(':visible').should('have.text', 'x0')
     cy.get('[data-testid="tactic-uses"][data-tactic-name="cases"]').filter(':visible').should('have.text', 'x0')
     clickGoal()
-    goalShouldBe('S a > a')
+    goalShouldBe('S n > n')
     clickGoal()
     goalShouldBe('False')
-    cy.get('[data-testid="hyp-card"][data-hyp-name="h"]').should('have.attr', 'data-hyp-type', 'S(a) ≤ a')
+    cy.get('[data-testid="hyp-card"][data-hyp-name="h"]').should('have.attr', 'data-hyp-type', 'S(n) ≤ n')
     clickHyp('h')
     hypShouldExist('c1')
     const play = (tactic: string, expected: string) => {
       harness(h => h.runPlayerTactic(tactic))
       cy.get(`[data-testid="hyp-card"][data-hyp-type="${expected}"]`, { timeout: LOAD_TIMEOUT }).should('exist')
     }
-    cy.get('[data-testid="hyp-card"][data-hyp-type="a = S(a) + c1"]').should('have.attr', 'data-hyp-name', 'h1')
-    play('drag_rw_hyp_rhs h1 [MyNat.succ_add]', 'a = S(a + c1)')
-    play('drag_rw_hyp_rhs h1 [← MyNat.add_succ]', 'a = a + S(c1)')
-    play('symm at h1', 'a + S(c1) = a')
+    cy.get('[data-testid="hyp-card"][data-hyp-type="n = S(n) + c1"]').should('have.attr', 'data-hyp-name', 'h1')
+    play('drag_rw_hyp_rhs h1 [MyNat.succ_add]', 'n = S(n + c1)')
+    play('drag_rw_hyp_rhs h1 [← MyNat.add_succ]', 'n = n + S(c1)')
+    play('symm at h1', 'n + S(c1) = n')
     harness(h => h.dragTheoremToHyp('MyNat.add_right_eq_self', 'h1'))
     hypShouldExist('thm_add_right_eq_self')
     play('symm at thm_add_right_eq_self', '0 = S(c1)')
@@ -2582,7 +2586,7 @@ describe('Natural Numbers Video Game', () => {
     // The next level has the theorem this one proved.
     openCanvasLevel('LessOrEqualBonus', 2)
     headerShouldNameLevel('A1', 'Irreflexivity of >')
-    goalShouldBe('∀ (a : ℕ), ¬a > a')
+    goalShouldBe('∀ (n : ℕ), ¬n > n')
     cy.get('[data-testid="theorem-tray-card"]', { timeout: LOAD_TIMEOUT }).should('have.length.greaterThan', 0)
     trayShouldHaveCard('lt_succ_self', true)
   })
@@ -2624,18 +2628,29 @@ describe('Natural Numbers Video Game', () => {
   it('defines ≤ as `∃ c, y = x + c`, on every card, and names the numbers it gives c1, c2', () => {
     openCanvasLevel('LessOrEqual', 2)
     headerShouldNameLevel('1', 'le_refl')
-    goalShouldBe('∀ (x : ℕ), x ≤ x')
+    goalShouldBe('∀ (n : ℕ), n ≤ n')
     goalHintShouldContain('We define')
     goalHintShouldContain('∃ c, y = x + c')
     clickGoal()
-    goalShouldBe('x ≤ x')
+    goalShouldBe('n ≤ n')
     cy.get('[data-testid="goal-card"]').filter(':visible').first().find('.statement-atomic-form')
-      .should('have.text', '∃ c, x = x + c')
+      .should('have.text', '∃ c, n = n + c')
     // `add_left_eq_zero` is given here; Induction World's `add_right_eq_zero` isn't
     // around yet, since this part of ≤ World doesn't wait for it.
     cy.get('[data-testid="theorem-tray-card"]', { timeout: LOAD_TIMEOUT }).should('have.length.greaterThan', 0)
     trayShouldHaveCard('add_left_eq_zero', true)
     trayShouldHaveCard('add_right_eq_zero', false)
+    // The theorem this level proves, and the one that comes with it, are for later.
+    trayShouldHaveCard('leq_refl', false)
+    trayShouldHaveCard('eq_implies_leq', false)
+    openCanvasLevel('LessOrEqual', 3)
+    headerShouldNameLevel('2', 'Positivity')
+    goalShouldBe('∀ (n : ℕ), 0 ≤ n')
+    cy.get('[data-testid="theorem-tray-card"]', { timeout: LOAD_TIMEOUT }).should('have.length.greaterThan', 0)
+    trayShouldHaveCard('leq_refl', true)
+    trayShouldHaveCard('eq_implies_leq', true)
+    cy.get('[data-testid="theorem-tray-card"][data-theorem-label="eq_implies_leq"]')
+      .should('contain.text', 'a = b → a ≤ b')
 
     // Level 4's hint points at the hypothesis to click.
     openCanvasLevel('LessOrEqual', 5)
@@ -2644,23 +2659,24 @@ describe('Natural Numbers Video Game', () => {
 
     openCanvasLevel('LessOrEqual', 6)
     headerShouldNameLevel('5', 'Transitivity of ≤')
-    goalShouldBe('x ≤ z')
+    goalShouldBe('a ≤ c')
     cy.contains('there-exists hypotheses').should('not.exist')
+    // One of the level's numbers is `c`, so the definition's own number takes the next
+    // name the card can give it.
     cy.get('[data-testid="goal-card"]').filter(':visible').first().find('.statement-atomic-form')
-      .should('have.text', '∃ c, z = x + c')
+      .should('have.text', '∃ c2, c = a + c2')
     // A theorem's card writes the definition out the same way.
     cy.get('[data-testid="theorem-tray-card"]', { timeout: LOAD_TIMEOUT }).should('have.length.greaterThan', 0)
-    trayShouldHaveCard('le_refl', true)
-    cy.get('[data-testid="theorem-tray-card"][data-theorem-label="le_refl"] .statement-atomic-form')
-      .should('have.text', '∃ c, x = x + c')
-    // The numbers the two hypotheses give are `c1` and `c2`, never plain `c`.
+    trayShouldHaveCard('leq_refl', true)
+    cy.get('[data-testid="theorem-tray-card"][data-theorem-label="leq_refl"] .statement-atomic-form')
+      .should('have.text', '∃ c, n = n + c')
+    // The numbers the two hypotheses give are `c1` and `c2`: `c` is the level's own.
     clickHyp('hxy')
     hypShouldExist('c1')
-    cy.get('[data-testid="hyp-card"][data-hyp-type="y = x + c1"]').should('exist')
+    cy.get('[data-testid="hyp-card"][data-hyp-type="b = a + c1"]').should('exist')
     clickHyp('hyz')
     hypShouldExist('c2')
-    cy.get('[data-testid="hyp-card"][data-hyp-type="z = y + c2"]').should('exist')
-    cy.get('[data-testid="hyp-card"][data-hyp-name="c"]').should('not.exist')
+    cy.get('[data-testid="hyp-card"][data-hyp-type="c = b + c2"]').should('exist')
   })
 
   it('gives a proposition derived in the level a colour of its own, the world\'s fifth', () => {

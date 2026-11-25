@@ -999,35 +999,61 @@ test('a bonus row can be sent to either side; across the columns its levels sit 
   const layout = computePathMapLayout(nnvg10, { defaultColor: 'grey' })
   assertNoPathOverLevels(layout)
   const boss = node(layout, 'LessOrEqualBoss', 1)
-  // ≤ World is right of the centre, and its bonus levels go left: half a column apart,
-  // a quarter of a column from every column they pass, so that a path coming down a
-  // column runs midway between two of them.
-  const xs = [1, 2, 3, 4].map(n => node(layout, 'LessOrEqualBonus', n).x)
-  assert.deepEqual(xs, [1, 2, 3, 4].map(n => boss.x - (n - 0.5) * PATH_MAP_COLUMN_WIDTH / 2))
-  for (const x of xs) {
+  const slot = n => boss.x - (n - 0.5) * PATH_MAP_COLUMN_WIDTH / 2
+  const offColumns = x =>
     assert.equal(Math.abs(x - Math.round(x / PATH_MAP_COLUMN_WIDTH) * PATH_MAP_COLUMN_WIDTH), PATH_MAP_COLUMN_WIDTH / 4)
-  }
-  for (const n of [1, 2, 3, 4]) assert.equal(node(layout, 'LessOrEqualBonus', n).y, boss.y + PATH_MAP_ROW_HEIGHT)
   // The one level off the last level about powers goes right, at a bonus level's usual
   // distance: it doesn't reach the next column.
   const [last, fermat] = [node(layout, 'Power', 9), node(layout, 'PowerBonus', 1)]
   assert.ok(fermat.x > last.x && fermat.x < last.x + PATH_MAP_COLUMN_WIDTH)
-  // It waits for ≤ World's bonus levels, and the path to it carries their row on: out of
-  // the last of them, along to above the level, and down onto it, over the path that
-  // comes down the column in between.
-  const lastBonus = node(layout, 'LessOrEqualBonus', 4)
-  assert.ok(fermat.x < lastBonus.x && fermat.y > lastBonus.y)
-  assert.deepEqual(segment(layout, 'edge:LessOrEqualBonus:PowerBonus:out').points[0], { x: lastBonus.x, y: lastBonus.y })
-  assert.deepEqual(segment(layout, 'edge:LessOrEqualBonus:PowerBonus:in').points.slice(1), [
-    { x: fermat.x, y: lastBonus.y }, { x: fermat.x, y: fermat.y },
-  ])
-  assert.deepEqual(layout.segments.filter(s => s.bridge).map(s => s.key),
-    [`edge:LessOrEqualBonus:PowerBonus:in:bridge:${-PATH_MAP_COLUMN_WIDTH}`])
-  // From a main world such a path turns away below that world's own bonus row.
+  // With nothing waiting for them (here the level about Fermat waits for ≤ World's boss
+  // instead), ≤ World's bonus levels go left from below the boss, half a column apart
+  // and a quarter of a column from every column they pass, so that a path coming down
+  // a column runs midway between two of them.
   const fromBoss = computePathMapLayout({ ...nnvg10, edges: [
     ...nnvg10.edges.filter(([source, target]) => !(source === 'LessOrEqualBonus' && target === 'PowerBonus')),
     ['LessOrEqualBoss', 'PowerBonus'],
   ] }, { defaultColor: 'grey' })
+  assertNoPathOverLevels(fromBoss)
+  const plain = [1, 2, 3, 4].map(n => node(fromBoss, 'LessOrEqualBonus', n).x)
+  assert.deepEqual(plain, [1, 2, 3, 4].map(slot))
+  plain.forEach(offColumns)
+  // The level about Fermat waits for those bonus levels and lies lower, less than a
+  // column past the end of their row. So the last of them is right above it and the
+  // path between the two drops straight down; the levels before it are a slot further
+  // along than they would be, still off the columns, and the row bridges the path that
+  // comes down the column it crosses on the way to its last level.
+  const xs = [1, 2, 3, 4].map(n => node(layout, 'LessOrEqualBonus', n).x)
+  assert.deepEqual(xs, [slot(2), slot(3), slot(4), fermat.x])
+  xs.slice(0, 3).forEach(offColumns)
+  assert.ok(xs[2] - xs[3] >= PATH_MAP_COLUMN_WIDTH / 2)
+  for (const n of [1, 2, 3, 4]) assert.equal(node(layout, 'LessOrEqualBonus', n).y, boss.y + PATH_MAP_ROW_HEIGHT)
+  const lastBonus = node(layout, 'LessOrEqualBonus', 4)
+  assert.ok(fermat.y > lastBonus.y)
+  const drop = [
+    ...segment(layout, 'edge:LessOrEqualBonus:PowerBonus:out').points,
+    ...segment(layout, 'edge:LessOrEqualBonus:PowerBonus:in').points.slice(1),
+  ]
+  assert.deepEqual(drop[0], { x: lastBonus.x, y: lastBonus.y })
+  assert.deepEqual(drop.at(-1), { x: fermat.x, y: fermat.y })
+  assert.ok(drop.every(point => point.x === fermat.x))
+  assert.deepEqual(layout.segments.filter(s => s.bridge).map(s => s.key),
+    [`level:LessOrEqualBonus:3:bridge:${-PATH_MAP_COLUMN_WIDTH}`])
+  // A level that lies more than a column past the end of the row leaves the row where
+  // it is: the path to it carries the row on, out of its last level, along to above the
+  // level, and down onto it, over the path that comes down the column in between.
+  const shortRow = computePathMapLayout(
+    { ...nnvg10, worldSize: { ...nnvg10.worldSize, LessOrEqualBonus: 3 } }, { defaultColor: 'grey' })
+  assertNoPathOverLevels(shortRow)
+  assert.deepEqual([1, 2, 3].map(n => node(shortRow, 'LessOrEqualBonus', n).x), [1, 2, 3].map(slot))
+  const shortLast = node(shortRow, 'LessOrEqualBonus', 3)
+  assert.deepEqual(segment(shortRow, 'edge:LessOrEqualBonus:PowerBonus:out').points[0], { x: shortLast.x, y: shortLast.y })
+  assert.deepEqual(segment(shortRow, 'edge:LessOrEqualBonus:PowerBonus:in').points.slice(1), [
+    { x: fermat.x, y: shortLast.y }, { x: fermat.x, y: fermat.y },
+  ])
+  assert.deepEqual(shortRow.segments.filter(s => s.bridge).map(s => s.key),
+    [`edge:LessOrEqualBonus:PowerBonus:in:bridge:${-PATH_MAP_COLUMN_WIDTH}`])
+  // From a main world such a path turns away below that world's own bonus row.
   const crossY = boss.y + 1.5 * PATH_MAP_ROW_HEIGHT
   assert.deepEqual(segment(fromBoss, 'edge:LessOrEqualBoss:PowerBonus:in').points.slice(1), [
     { x: boss.x, y: crossY }, { x: fermat.x, y: crossY }, { x: fermat.x, y: fermat.y },
