@@ -554,6 +554,9 @@ structure World where
   /-- Visual Lean path map: column of this world's path (0 = centre, negative = left).
   For a bonus world, the column its path onwards to a later world runs down. -/
   visualMapColumn? : Option Int := none
+  /-- Visual Lean path map: instead of a column, the level of a bonus world that this
+  world's path (a bonus world's path onwards) runs right under (see `VisualMapUnder`). -/
+  visualMapUnder? : Option (Name × Nat) := none
   /-- Visual Lean path map: this world sits below every other world, as a closing level
   does (see `VisualMapBottom`). -/
   visualMapBottom : Bool := false
@@ -590,6 +593,10 @@ instance : ToJson World := ⟨
       | none => []) ++
     (match world.visualMapColumn? with
       | some column => [("visualMapColumn", toJson column)]
+      | none => []) ++
+    (match world.visualMapUnder? with
+      | some (source, level) =>
+        [("visualMapUnder", Json.mkObj [("world", toJson source), ("level", toJson level)])]
       | none => []) ++
     (if world.visualSharedPath then [("visualSharedPath", toJson true)] else []) ++
     (if world.visualMapBottom then [("visualMapBottom", toJson true)] else []) ++
@@ -741,6 +748,7 @@ def World.merge (old : World) (new : World) : World :=
   visualBonusSide? := new.visualBonusSide? <|> old.visualBonusSide?
   visualColor? := new.visualColor? <|> old.visualColor?
   visualMapColumn? := new.visualMapColumn? <|> old.visualMapColumn?
+  visualMapUnder? := new.visualMapUnder? <|> old.visualMapUnder?
   visualSharedPath := new.visualSharedPath || old.visualSharedPath
   visualMapBottom := new.visualMapBottom || old.visualMapBottom
   visualContinues? := new.visualContinues? <|> old.visualContinues?

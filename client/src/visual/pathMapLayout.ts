@@ -24,6 +24,10 @@ export interface PathMapWorld {
    * that its path onwards to a later world runs down. Bonus branches off one level
    * that lead to one world and name its column join into one path there. */
   column?: number
+  /** In place of `column`: this level of a bonus world, which the world's path (a bonus
+   * world's path onwards) runs right under. A bonus row's levels sit between the
+   * columns, so no column number says that. */
+  under?: { world: string; level: number }
   /** Below every other world, as a closing level is. */
   bottom?: boolean
   /** Not part of any named world: grey and unlabelled. */
@@ -189,6 +193,22 @@ export interface PathMapLayoutOptions {
 
 export function computePathMapLayout(input: PathMapInput, options: PathMapLayoutOptions = {}): PathMapLayout {
   const columnWidth = options.columnWidth ?? PATH_MAP_COLUMN_WIDTH
+  // A world placed under a bonus level: where a bonus row's levels are doesn't depend
+  // on the columns of the worlds further down, so lay the map out without those
+  // placements first, read off where the levels are, and lay it out again with each
+  // such world in the column, a fraction of one as a rule, that its level is at.
+  const placedUnder = Object.entries(input.worlds).filter(([, world]) => world.under !== undefined)
+  if (placedUnder.length > 0) {
+    const without = (worlds: Record<string, PathMapWorld>) =>
+      Object.fromEntries(Object.entries(worlds).map(([id, { under: _under, ...world }]) => [id, world]))
+    const first = computePathMapLayout({ ...input, worlds: without(input.worlds) }, options)
+    const worlds = without(input.worlds)
+    for (const [id, { under }] of placedUnder) {
+      const level = first.nodes.find(node => node.world === under!.world && node.level === under!.level)
+      if (level) worlds[id] = { ...worlds[id]!, column: level.x / columnWidth }
+    }
+    return computePathMapLayout({ ...input, worlds }, options)
+  }
   const worldIds = Object.keys(input.worlds)
     .filter(world => visibleLevels(input, world).length > 0)
     .sort()

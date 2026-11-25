@@ -280,6 +280,7 @@ export function VisualPathMap({ gameInfo, openAnyLevel, fullComplete = false, hi
       // Where the neutral palette isn't drawn, a scheme's world has a plain colour.
       color: neutral ? node.visualColor : CLASSIC_COLOR_OF_SCHEME[node.visualColor ?? ''] ?? node.visualColor,
       column: node.visualMapColumn,
+      under: node.visualMapUnder,
       shared: node.visualSharedPath,
       continues: node.visualContinues,
       bottom: node.visualMapBottom,

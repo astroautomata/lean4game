@@ -606,6 +606,10 @@ describe('Natural Numbers Video Game', () => {
       expect(centre('Logic', 1).y).to.be.greaterThan(centre('PropositionBonusC', 1).y)
       expect(centre('Logic', 1).x).to.be.greaterThan(centre('PropositionBonusC', 1).x)
       expect(centre('Logic', 1).x).to.be.lessThan(centre('PropositionBonusB', 3).x)
+      // It is right under bonus B1, and so is the path the two branches join into.
+      expect(centre('Logic', 1).x).to.be.closeTo(centre('PropositionBonusB', 2).x, 1)
+      const joined = Cypress.$('[data-segment="edge:PropositionBonusC:Logic:in"]')[0]!.getBoundingClientRect()
+      expect(joined.left + joined.width / 2).to.be.closeTo(centre('PropositionBonusB', 2).x, 2)
       // ≤ World's bonus levels go left from below its boss, towards the middle, and
       // the bonus about Fermat goes right from below the last level about powers: it is
       // right under the last of them, so the path between the two drops straight down.
@@ -1900,7 +1904,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('proves the theorem level with the axioms', () => {
     openRewriteLevel(2, 'Successor')
-    headerShouldNameLevel('1', 'add_succ')
+    headerShouldNameLevel('1', 'add_one')
     lessonsShouldContain('from only the axioms below (and induction)')
     relationShouldBe('a + 1 = S(a)')
     cy.get('.tr-rule-card[data-rule-label="add_zero"]').should('have.attr', 'data-rule-axiom', 'true')
@@ -1934,17 +1938,17 @@ describe('Natural Numbers Video Game', () => {
     cy.contains('.tr-tab-btn', 'Theorems').should('not.exist')
     cy.contains('.tr-tab-btn', 'Hypotheses').should('not.exist')
     cy.get('.tr-tab-btn.active').should($tab => expect($tab.text().trim()).to.equal('+'))
-    cy.get('.tr-rule-card[data-rule-label="add_one_eq_succ"]').filter(':visible').first()
+    cy.get('.tr-rule-card[data-rule-label="add_one"]').filter(':visible').first()
       .should('have.class', 'visual-emphasize')
-    cy.get('.tr-rule-card[data-rule-label="add_one_eq_succ"]').should('exist').and('not.have.attr', 'data-rule-axiom')
+    cy.get('.tr-rule-card[data-rule-label="add_one"]').should('exist').and('not.have.attr', 'data-rule-axiom')
     cy.get('.tr-rule-card[data-rule-label="add_zero"]').filter(':visible').first()
       .should('have.attr', 'data-rule-axiom', 'true').and('have.class', 'tr-axiom-card')
     // The numerals' axioms are on their own tab.
     cy.get('.tr-rule-card[data-rule-label="one_eq_succ_zero"]').should('not.exist')
     cy.contains('.tr-tab-btn', 'Everything').click()
-    rewrite('MyNat.add_one_eq_succ', 'left')
-    rewrite('MyNat.add_one_eq_succ', 'left', [1])
-    rewrite('MyNat.add_one_eq_succ', 'left', [1, 1])
+    rewrite('MyNat.add_one', 'left')
+    rewrite('MyNat.add_one', 'left', [1])
+    rewrite('MyNat.add_one', 'left', [1, 1])
     relationShouldBe('S(S(S(1))) = 4')
     rewrite('MyNat.four_eq_succ_three', 'right')
     rewrite('MyNat.three_eq_succ_two', 'right', [1])
@@ -1974,7 +1978,7 @@ describe('Natural Numbers Video Game', () => {
     lessonsShouldContain('Now we can just make both sides match as usual.')
     cy.get('[data-testid="rewrite-lessons"]').should('not.contain.text', 'We can use the hypothesis')
     cy.get('.tr-tab-btn').filter((_, tab) => tab.textContent?.trim() === '+').click()
-    clickRule('add_one_eq_succ')
+    clickRule('add_one')
     relationShouldBe('S(1) = 2')
     cy.contains('.tr-tab-btn', '012').click()
     clickRuleInDirection('two_eq_succ_one', true)
@@ -2007,7 +2011,7 @@ describe('Natural Numbers Video Game', () => {
     relationShouldBe('x = 1 + 1')
     hintShouldContain('We need to match the form')
     cy.get('.tr-tab-btn').filter((_, tab) => tab.textContent?.trim() === '+').click()
-    clickRule('add_one_eq_succ')
+    clickRule('add_one')
     relationShouldBe('x = S(1)')
     cy.contains('.tr-tab-btn', '012').click()
     clickRuleInDirection('two_eq_succ_one', true)
@@ -2199,7 +2203,7 @@ describe('Natural Numbers Video Game', () => {
     cy.get('.tr-swap-btn').should('not.exist')
     cy.get('.tr-transformation-overlay button[aria-label="Reset"]').should('be.disabled')
     cy.get('.tr-tab-btn').filter((_, tab) => tab.textContent?.trim() === '+').click()
-    clickRule('add_one_eq_succ')
+    clickRule('add_one')
     relationShouldBe('x = S(1)')
     cy.get('.tr-transformation-overlay button[aria-label="Reset"]').should('not.be.disabled').click()
     relationShouldBe('x = 1 + 1')
@@ -2627,7 +2631,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('defines ≤ as `∃ c, y = x + c`, on every card, and names the numbers it gives c1, c2', () => {
     openCanvasLevel('LessOrEqual', 2)
-    headerShouldNameLevel('1', 'le_refl')
+    headerShouldNameLevel('1', 'leq_refl')
     goalShouldBe('∀ (n : ℕ), n ≤ n')
     goalHintShouldContain('We define')
     goalHintShouldContain('∃ c, y = x + c')
@@ -2971,7 +2975,7 @@ describe('Natural Numbers Video Game', () => {
     goalHintShouldContain('double-clicking the goal')
     harness(h => h.openGoalTransform())
     rewrite('hx', 'left', [1])
-    rewrite('MyNat.add_one_eq_succ', 'left')
+    rewrite('MyNat.add_one', 'left')
     rewrite('MyNat.two_eq_succ_one', 'right')
     relationShouldBe('S(1) = S(1)')
     checkBackToCanvas()

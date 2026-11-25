@@ -33,6 +33,9 @@ export interface VisualWorldNode {
   /** Map column: 0 is the centre, negative is left (`VisualMapColumn`). For a bonus
    * world, the column its path onwards runs down. */
   visualMapColumn?: number,
+  /** In place of a column: the level of a bonus world that the path runs right under
+   * (`VisualMapUnder`). */
+  visualMapUnder?: { world: string, level: number },
   /** Sits below every other world, as a closing level does (`VisualMapBottom`). */
   visualMapBottom?: boolean,
   /** Not part of any named world: grey and unlabelled (`VisualSharedPath`). */

@@ -995,6 +995,54 @@ test('bonus branches that lead to one world and name its column join into one pa
   for (const source of ['Power', 'AdvMultiplication']) assert.ok(segment(layout, `edge:${source}:Outro:in`))
 })
 
+test('a world can be placed right under a level of a bonus row, where its path then comes down', () => {
+  // The map since the 2026-11-25 spec pull's V13 note: Logic World, and the one path
+  // that Proposition World's last bonus branches join into, are under bonus B1. A bonus
+  // row's levels sit between the columns, so the three worlds name that level and no
+  // column.
+  const under = { world: 'PropositionBonusB', level: 2 }
+  const { column: _logic, ...logicWorld } = nnvg10.worlds.Logic
+  const { column: _b, ...bonusB } = nnvg10.worlds.PropositionBonusB
+  const { column: _c, ...bonusC } = nnvg10.worlds.PropositionBonusC
+  const layout = computePathMapLayout({ ...nnvg10, worlds: {
+    ...nnvg10.worlds,
+    Logic: { ...logicWorld, under },
+    PropositionBonusB: { ...bonusB, under },
+    PropositionBonusC: { ...bonusC, under },
+  } }, { defaultColor: 'grey' })
+  assertNoPathOverLevels(layout)
+  const before = computePathMapLayout(nnvg10, { defaultColor: 'grey' })
+  const [b1, b2, c, logic] = [node(layout, 'PropositionBonusB', 2), node(layout, 'PropositionBonusB', 3),
+    node(layout, 'PropositionBonusC', 1), node(layout, 'Logic', 1)]
+  // The bonus rows are where they were, and Logic World has moved from its column to
+  // under B1, between two columns.
+  for (const [world, level] of [['PropositionBonusB', 1], ['PropositionBonusB', 2], ['PropositionBonusB', 3], ['PropositionBonusC', 1]]) {
+    assert.deepEqual({ x: node(layout, world, level).x, y: node(layout, world, level).y },
+      { x: node(before, world, level).x, y: node(before, world, level).y })
+  }
+  assert.equal(logic.x, b1.x)
+  assert.notEqual(logic.x % PATH_MAP_COLUMN_WIDTH, 0)
+  assert.equal(logic.y, node(before, 'Logic', 1).y)
+  // C runs along its row to under B1; B comes down beside its own levels to that row
+  // and runs in from the other side; from there it is one path straight down.
+  const pathOf = source => [
+    ...segment(layout, `edge:${source}:Logic:out`).points, ...segment(layout, `edge:${source}:Logic:in`).points.slice(1)]
+  assert.deepEqual(pathOf('PropositionBonusC').slice(0, 2), [{ x: c.x, y: c.y }, { x: b1.x, y: c.y }])
+  assert.deepEqual(pathOf('PropositionBonusB').slice(0, 3), [{ x: b2.x, y: b2.y }, { x: b2.x, y: c.y }, { x: b1.x, y: c.y }])
+  for (const source of ['PropositionBonusB', 'PropositionBonusC']) {
+    const down = pathOf(source).filter(point => point.y > c.y)
+    assert.ok(down.length > 0 && down.every(point => point.x === b1.x))
+    assert.deepEqual(down.at(-1), { x: logic.x, y: logic.y })
+  }
+  // The ≠ World's path to Logic World turns in above it as before.
+  assert.deepEqual(segment(layout, 'edge:NeqJoined:Logic:in').points.at(-1), { x: logic.x, y: logic.y })
+  // A level that isn't on the map leaves the world where its column puts it.
+  const missing = computePathMapLayout({ ...nnvg10, worlds: {
+    ...nnvg10.worlds, Logic: { ...nnvg10.worlds.Logic, under: { world: 'PropositionBonusB', level: 9 } },
+  } }, { defaultColor: 'grey' })
+  assert.equal(node(missing, 'Logic', 1).x, node(before, 'Logic', 1).x)
+})
+
 test('a bonus row can be sent to either side; across the columns its levels sit between them', () => {
   const layout = computePathMapLayout(nnvg10, { defaultColor: 'grey' })
   assertNoPathOverLevels(layout)

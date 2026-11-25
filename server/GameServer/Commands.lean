@@ -410,6 +410,15 @@ elab "VisualMapColumn" column:visualMapColumnArg : command => do
     | _ => throwUnsupportedSyntax
   modifyCurWorld fun world => pure { world with visualMapColumn? := some value }
 
+/-- Path map: the current world's path runs right under the given level of a bonus
+world, whose levels are a row and so sit between the columns. In a bonus world it is
+the path from the bonus on to a later world that runs down there, as with
+`VisualMapColumn`, which this takes the place of.
+Use it in the world file. Example: `VisualMapUnder PropositionBonusB 2` -/
+elab "VisualMapUnder" source:ident level:num : command => do
+  modifyCurWorld fun world => pure { world with
+    visualMapUnder? := some (source.getId, level.getNat) }
+
 /-- Path map: the current world isn't part of any named world, such as an opening text
 level before the paths split. It is drawn in the shared grey and gets no title label.
 Use it in the world file. -/
