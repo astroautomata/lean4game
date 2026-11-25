@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { AnnotatedLevelTitle, plainLevelTitle } from '../components/annotated_level_title'
 import { FeedbackReportButton } from '../components/feedback_report'
+import { LevelFinishContext } from './LevelInterstitial'
 
 interface VisualHeaderProps {
   worldId?: string
@@ -60,6 +61,8 @@ export function VisualHeader({
     entryRef.current = { key: entryKey, completed: previouslyCompleted }
   }
   const completedOnEntry = entryRef.current.completed
+  // A level with a screen after it is left through that screen, and its button says so.
+  const { hasPostLevel, finish } = React.useContext(LevelFinishContext)
   const shownLevelId = displayLevelId ?? levelId
   const plainTitle = levelTitle ? plainLevelTitle(levelTitle) : ''
   const levelLabel = (worldTitle ?? worldId)
@@ -107,22 +110,24 @@ export function VisualHeader({
         {!hideNav && (hasNext ? (
           <button
             className={`visual-header-nav-btn visual-header-next-btn${isCompleted ? ' emphasized' : ''}`}
-            onClick={onNext}
+            onClick={() => finish(onNext)}
             disabled={nextLocked}
             aria-label={nextLocked ? 'Next level (locked until this level is solved)' : 'Next level'}
             title={nextLocked ? 'Solve this level to unlock the next one' : undefined}
+            data-finish={hasPostLevel ? 'true' : undefined}
           >
-            Next level →
+            {hasPostLevel ? 'Finish →' : 'Next level →'}
           </button>
         ) : (
           // A world's last level continues to the map, as classic play's Home
           // button does. On phones it keeps the Next arrow.
           <button
             className={`visual-header-nav-btn visual-header-next-btn${isCompleted ? ' emphasized' : ''}`}
-            onClick={onWorldMap}
+            onClick={() => finish(onWorldMap)}
             aria-label="World map"
+            data-finish={hasPostLevel ? 'true' : undefined}
           >
-            World Map →
+            {hasPostLevel ? 'Finish →' : 'World Map →'}
           </button>
         ))}
       </div>

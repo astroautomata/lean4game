@@ -80,22 +80,25 @@ function clearFrames() {
   cy.window().then(win => { (win as FrameWindow).__frames.length = 0 })
 }
 
-function visit(url: string, options: { fresh?: boolean, record?: boolean } = {}) {
+/** `screens`: with the screens before and after the levels, which the tests of the
+ * levels themselves play without. */
+function visit(url: string, options: { fresh?: boolean, record?: boolean, screens?: boolean } = {}) {
   cy.visit(url, {
     onBeforeLoad(win) {
       if (options.fresh) win.localStorage.clear()
       win.localStorage.setItem('telemetryConsent', 'refused')
+      if (!options.screens) win.localStorage.setItem('visual_interstitials', 'off')
       if (options.record) recordFrames(win)
     },
   })
 }
 
-/** Open the map with every level of these worlds (name to size) finished. */
-function visitWithProgress(worlds: Record<string, number>) {
+/** Open the map, or `url`, with every level of these worlds (name to size) finished. */
+function visitWithProgress(worlds: Record<string, number>, url = MAP) {
   const data = Object.fromEntries(Object.entries(worlds).map(([world, size]) => [world, Object.fromEntries(
     Array.from({ length: size }, (_, index) => [index + 1, { code: '', selections: [], completed: true, help: [] }]),
   )]))
-  cy.visit(MAP, {
+  cy.visit(url, {
     onBeforeLoad(win) {
       win.localStorage.clear()
       win.localStorage.setItem('telemetryConsent', 'refused')
@@ -1900,6 +1903,130 @@ describe('Natural Numbers Video Game', () => {
     rewrite('MyNat.two_eq_succ_one', 'left', [], true)
     relationShouldBe('2 = 2')
     check()
+  })
+
+  it('shows a screen before a level, and one after it on the way to the next', () => {
+    const screen = '[data-testid="level-interstitial"]'
+    const nextButton = () => cy.get('.visual-header-next-btn').filter(':visible').first()
+    // Successor World's first level opens with the axioms it brings.
+    visitWithProgress({ Intro: 1, Rewrite: 6 }, level('Successor', 1))
+    cy.get(screen, { timeout: LOAD_TIMEOUT }).should('have.attr', 'data-kind', 'pre')
+    cy.get(screen).find('.level-interstitial-title').should('have.text', 'Axioms Unlocked!')
+    cy.get(screen).find('.level-interstitial-item').should('have.length', 4)
+    cy.get(screen).find('[data-unlock="one_eq_succ_zero"]').should('contain.text', '1 = S(0)')
+    cy.get(screen).should('contain.text', 'building up facts about the natural numbers from scratch')
+    // The level is there behind it, dimmed, and the screen fades in.
+    cy.get(screen).should($screen => {
+      expect(getComputedStyle($screen[0]!).animationName).to.equal('level-interstitial-in')
+      expect(getComputedStyle($screen[0]!).backgroundColor).to.match(/^rgba\(.*, 0\.72\)$/u)
+    })
+    cy.get('.visual-header').should('exist')
+    cy.contains(`${screen} button`, 'Start').click()
+    cy.get(screen).should('not.exist')
+    expectRewriteOnlyLevel()
+    // This level has no screen after it, so its button is the usual one.
+    nextButton().should('contain.text', 'Next level').and('not.have.attr', 'data-finish')
+
+    // The next level brings two more axioms, with a word about each.
+    visitWithProgress({ Intro: 1, Rewrite: 6, Successor: 1 }, level('Successor', 2))
+    cy.get(screen, { timeout: LOAD_TIMEOUT }).find('.level-interstitial-title').should('have.text', 'Axioms Unlocked!')
+    cy.get(screen).find('[data-unlock="add_zero"]').should('contain.text', 'n + 0 = n')
+      .and('contain.text', 'Eliminate added zeroes, but only on the right.')
+    cy.get(screen).find('[data-unlock="add_succ"]').should('contain.text', 'Move successor functions out to the right addend.')
+    cy.contains(`${screen} button`, 'Start').click()
+    cy.get(screen).should('not.exist')
+    expectRewriteOnlyLevel()
+    // It has a screen after it: the way on says Finish, and is shut until the level is done.
+    nextButton().should('contain.text', 'Finish').and('have.attr', 'data-finish', 'true').and('be.disabled')
+    rewrite('MyNat.one_eq_succ_zero', 'left', [2])
+    rewrite('MyNat.add_succ', 'left')
+    rewrite('MyNat.add_zero', 'left', [1])
+    check()
+    nextButton().should('not.be.disabled').click()
+    // The theorem the level proved, and then the next level with its own screen.
+    cy.get(screen).should('have.attr', 'data-kind', 'post')
+    cy.get(screen).find('.level-interstitial-title').should('have.text', 'Theorem Unlocked!')
+    cy.get(screen).find('[data-unlock="add_one"]').should('contain.text', 'a + 1 = S(a)')
+      .and('contain.text', 'Quickly collapse added ones.')
+    cy.get(screen).should('contain.text', 'available to you as theorems')
+    cy.location('pathname').should('contain', '/world/Successor/level/2/')
+    cy.contains(`${screen} button`, 'Continue').click()
+    cy.location('pathname', { timeout: LOAD_TIMEOUT }).should('contain', '/world/Successor/level/3/')
+    // A boss is announced: no cards, its name as the headline.
+    cy.get(`${screen}[data-kind="pre"]`, { timeout: LOAD_TIMEOUT }).find('.level-interstitial').should('have.class', 'announcement')
+    cy.get(screen).find('.level-interstitial-title').should('have.text', 'Successor World Miniboss')
+    cy.get(screen).find('.level-interstitial-text').should('have.text', 'Counting to Four')
+    cy.get(screen).find('.level-interstitial-item').should('not.exist')
+    cy.contains(`${screen} button`, 'Start').click()
+    cy.get(screen).should('not.exist')
+    headerShouldNameLevel('2', 'Counting to Four (Miniboss)')
+  })
+
+  it('announces a tactic before the level that brings it', () => {
+    visitWithProgress({ Intro: 1, Rewrite: 6, Proposition: 8, Successor: 3, SuccessorJoined: 3 }, level('Induction', 1))
+    const screen = '[data-testid="level-interstitial"]'
+    cy.get(screen, { timeout: LOAD_TIMEOUT }).find('.level-interstitial-title').should('have.text', 'Tactic Unlocked!')
+    cy.get(screen).find('[data-unlock="induction"] .tactic-tray-card').should('contain.text', 'induction')
+    cy.contains(`${screen} button`, 'Start').click()
+    cy.get(screen).should('not.exist')
+    cy.get('[data-testid="goal-card"]', { timeout: LOAD_TIMEOUT }).should('be.visible')
+    cy.get('.visual-header-next-btn').filter(':visible').first().should('contain.text', 'Finish')
+  })
+
+  it('keeps the Compendium off the map until something is unlocked, then lists it all', () => {
+    const button = '[data-testid="compendium-button"]'
+    const entry = (label: string) => `[data-testid="compendium-entry"][data-entry="${label}"]`
+    // A new player has nothing to look up.
+    visit(MAP, { fresh: true })
+    mapLevel('Outro', 1).should('exist')
+    cy.get(button).should('not.exist')
+    // With Successor World open, its first axioms are the player's.
+    visitWithProgress({ Intro: 1, Rewrite: 6 })
+    mapLevel('Outro', 1).should('exist')
+    cy.get(button, { timeout: LOAD_TIMEOUT }).should('have.text', 'Compendium').click()
+    cy.get('[data-testid="compendium"]').should('be.visible')
+    cy.get('[data-testid="visual-path-map"]').should('not.exist')
+    cy.get('[data-testid="compendium-count"]', { timeout: LOAD_TIMEOUT }).should('have.text', '4 of 69 unlocked')
+    cy.get('[data-section="equality"]').find(entry('one_eq_succ_zero')).should('contain.text', '1 = S(0)')
+    cy.get('[data-section="equality"] [data-testid="compendium-entry"]').should('have.length', 33)
+    cy.get('[data-section="proposition"] [data-testid="compendium-entry"]').should('have.length', 34)
+    cy.get('[data-section="tactic"] [data-testid="compendium-entry"]').should('have.length', 2)
+    // The rest is there greyed out, with no name.
+    cy.get('[data-section="proposition"] [data-testid="compendium-entry"][data-locked="true"]').should('have.length', 34)
+    cy.get('[data-section="tactic"] [data-testid="compendium-entry"][data-locked="true"]').should('have.length', 2)
+    cy.get('[data-testid="compendium-entry"][data-locked="true"]').first().should('have.text', '???')
+    cy.get(entry('add_zero')).should('not.exist')
+    // An entry's page: what it is, and where it came from.
+    cy.get(`${entry('one_eq_succ_zero')} button`).click()
+    cy.get('[data-testid="compendium-page"]').should('be.visible')
+    cy.get('[data-testid="compendium-kind"]').should('have.text', 'Axiom')
+    cy.get('[data-testid="compendium-source"]').should('have.text', 'Unlocked in Successor World 0')
+    cy.contains('[data-testid="compendium-page"] button', 'Back').click()
+    cy.get('[data-testid="compendium-page"]').should('not.exist')
+    cy.contains('[data-testid="compendium"] button', 'Map').click()
+    cy.get('[data-testid="visual-path-map"]').should('exist')
+    cy.get(button).should('exist')
+
+    // Further on: a theorem the player proved, with what its screen said, and a tactic.
+    visitWithProgress({ Intro: 1, Rewrite: 6, Proposition: 8, Successor: 3, SuccessorJoined: 3 })
+    cy.get(button, { timeout: LOAD_TIMEOUT }).click()
+    cy.get(`${entry('add_one')} button`, { timeout: LOAD_TIMEOUT }).click()
+    cy.get('[data-testid="compendium-kind"]').should('have.text', 'Theorem')
+    cy.get('[data-testid="compendium-page"]').should('contain.text', 'Quickly collapse added ones.')
+      .and('contain.text', 'a + 1 = S(a)')
+    cy.get('[data-testid="compendium-source"]').should('have.text', 'Proved in Successor World 1')
+    cy.contains('[data-testid="compendium-page"] button', 'Back').click()
+    cy.get(`${entry('add_zero')} button`).click()
+    cy.get('[data-testid="compendium-kind"]').should('have.text', 'Axiom')
+    cy.get('[data-testid="compendium-page"]').should('contain.text', 'Eliminate added zeroes, but only on the right.')
+    cy.contains('[data-testid="compendium-page"] button', 'Back').click()
+    // Induction World's first level can be played, so its tactic is the player's.
+    cy.get(`[data-section="tactic"] ${entry('induction')} button`).click()
+    cy.get('[data-testid="compendium-kind"]').should('have.text', 'Tactic')
+    cy.get('[data-testid="compendium-source"]').should('have.text', 'Unlocked in Induction World 0')
+    cy.contains('[data-testid="compendium-page"] button', 'Back').click()
+    // `zero_add` is proved there, and that level isn't done.
+    cy.get(entry('zero_add')).should('not.exist')
   })
 
   it('proves the theorem level with the axioms', () => {

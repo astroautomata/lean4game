@@ -22,6 +22,8 @@ function visit(url: string) {
     onBeforeLoad(win) {
       win.localStorage.clear()
       win.localStorage.setItem('telemetryConsent', 'refused')
+      // The levels are played without the screens before and after them.
+      win.localStorage.setItem('visual_interstitials', 'off')
     },
   })
 }

@@ -35,9 +35,11 @@ import { levelStartsWithBindersInGoal } from './initialGoalState'
 import { VisualAttemptLog } from './visualTelemetry'
 import type { VisualGesture } from './visualTelemetry'
 import { bonusAnchorsOf, computeVisualProgressFrontier, isVisualLevelUnlocked } from './visualWorldProgress'
+import { VISUAL_TACTIC_NAMES, type InterstitialScreen } from './compendiumData'
+import { interstitialsEnabled, LevelFinishContext, LevelInterstitial, resolveUnlocks, type Unlock } from './LevelInterstitial'
 import './visual.css'
 
-const SUPPORTED_VISUAL_TACTICS = new Set(['symm', 'induction', 'cases', 'positivity', 'exfalso'])
+const SUPPORTED_VISUAL_TACTICS = VISUAL_TACTIC_NAMES
 // No retries: each retry opens a new WebSocket, which causes the relay to kill
 // the still-elaborating exclusive Lean process and restart from scratch.
 const INITIAL_PROOF_MAX_ATTEMPTS = 1
@@ -355,6 +357,13 @@ export function VisualProofPage() {
   const handleNextLevel = useCallback(() => {
     navigate(`/${gameId}/world/${worldId}/level/${nextLevelId}/visual`)
   }, [navigate, gameId, worldId, nextLevelId])
+  // The screens before and after this level, and the one that is up.
+  const [levelScreens, setLevelScreens] = useState<{
+    pre?: { screen: InterstitialScreen; unlocks: Unlock[] }
+    post?: { screen: InterstitialScreen; unlocks: Unlock[] }
+  } | null>(null)
+  const [openScreen, setOpenScreen] = useState<'pre' | 'post' | null>(null)
+  const afterPostLevelRef = useRef<(() => void) | null>(null)
   // Next opens only a level the map would open, so players can't skip the
   // level that teaches a gesture; "Open Any Level" lifts the lock.
   const { isVisualOpenAnyLevel, isVisualFullComplete } = useContext(PreferencesContext)
@@ -576,6 +585,8 @@ export function VisualProofPage() {
     setVisualProofGraphInfos([])
     setVisualSpecializeInfos([])
     setLevelPresentation(DEFAULT_LEVEL_PRESENTATION)
+    setLevelScreens(null)
+    setOpenScreen(null)
     if (!worldId || !levelId) return
     let active = true
     const baseUrl = getDataBaseUrl().replace(/\/$/, '')
@@ -605,6 +616,8 @@ export function VisualProofPage() {
         visualTacticUses?: Array<{ tactic: string; uses: number }>
         visualEmphasizeForall?: string[]
         visualMulDot?: boolean
+        visualPreLevel?: InterstitialScreen | null
+        visualPostLevel?: InterstitialScreen | null
       }>(`${baseUrl}/${gameId}/level__${worldId}__${levelId}.json`),
       fetchJsonWithRetry<{ worlds?: { edges?: string[][]; nodes?: { [key: string]: { title?: string } } }; worldSize?: { [key: string]: number }; skippedLevels?: { [key: string]: number[] } }>(`${baseUrl}/${gameId}/game.json`),
     ]).then(async ([levelData, gameData]) => {
@@ -639,6 +652,16 @@ export function VisualProofPage() {
           emphasizeForall: levelData.visualEmphasizeForall ?? [],
           mulDot: levelData.visualMulDot ?? false,
         })
+        // The screens before and after the level (experimental). The one before it comes
+        // up as the level opens, whichever way the player got here.
+        if (interstitialsEnabled() && !levelData.visualTextLevel
+            && (levelData.visualPreLevel || levelData.visualPostLevel)) {
+          const screenOf = (screen: InterstitialScreen | null | undefined) => screen
+            ? { screen, unlocks: resolveUnlocks(screen, levelData.lemmas ?? [], levelData.tactics ?? []) }
+            : undefined
+          setLevelScreens({ pre: screenOf(levelData.visualPreLevel), post: screenOf(levelData.visualPostLevel) })
+          if (levelData.visualPreLevel) setOpenScreen('pre')
+        }
         // A text-only level is read on the world map, not played here.
         if (levelData.visualTextLevel) {
           navigate(`${gameMapPath(gameId, 'visual')}?text=${encodeURIComponent(`${worldId}/${levelId}`)}`, { replace: true })
@@ -789,6 +812,38 @@ export function VisualProofPage() {
   const hasNext = (() => { let n = levelId + 1; while (skippedLevels.includes(n) && knownWorldSize != null && n <= knownWorldSize) n++; return knownWorldSize == null || n <= knownWorldSize })()
   const displayLevelId = levelPresentation.levelNumber ?? visualDisplayLevelId(levelId, skippedLevels)
 
+  // Leaving a finished level that has a screen after it goes through that screen.
+  const postLevel = levelScreens?.post
+  const levelFinished = Boolean(previouslyCompleted) || isVisualFullComplete
+  const finishContext = {
+    hasPostLevel: Boolean(postLevel),
+    finish: (go: () => void) => {
+      if (!postLevel || !levelFinished) {
+        go()
+        return
+      }
+      afterPostLevelRef.current = go
+      setOpenScreen('post')
+    },
+  }
+  const screenUp = openScreen ? levelScreens?.[openScreen] : undefined
+  const interstitial = openScreen && screenUp ? (
+    <LevelInterstitial
+      key={`${worldId}/${levelId}/${openScreen}`}
+      gameId={gameId}
+      kind={openScreen}
+      screen={screenUp.screen}
+      unlocks={screenUp.unlocks}
+      buttonLabel={openScreen === 'pre' ? 'Start' : 'Continue'}
+      onDone={() => {
+        const next = openScreen === 'post' ? afterPostLevelRef.current : null
+        afterPostLevelRef.current = null
+        setOpenScreen(null)
+        next?.()
+      }}
+    />
+  ) : null
+
   const contentReady = Boolean(canvasState && presentationReady)
   if (!canvasState || !presentationReady || telemetryConsent.shouldHold) {
     const loadingProgress = contentReady
@@ -796,7 +851,8 @@ export function VisualProofPage() {
       : canvasState
         ? { value: 98, message: 'Loading level information…' }
         : leanLoadingProgress
-    return <VisualLoadingScreen
+    return <LevelFinishContext.Provider value={finishContext}>
+    <VisualLoadingScreen
       worldId={worldId}
       worldTitle={worldTitle ?? undefined}
       levelId={levelId}
@@ -818,9 +874,12 @@ export function VisualProofPage() {
       getFeedbackProofState={() => unloadedFeedbackState()}
       titlePending={levelTitle === null}
     />
+    {interstitial}
+    </LevelFinishContext.Provider>
   }
 
   return (
+    <LevelFinishContext.Provider value={finishContext}>
     <VisualCanvas
       gameId={gameId}
       initialState={canvasState}
@@ -875,6 +934,8 @@ export function VisualProofPage() {
       onAutosave={handleAutosave}
       proofPrelude={proofPreludeRef.current}
     />
+    {interstitial}
+    </LevelFinishContext.Provider>
   )
 }
 

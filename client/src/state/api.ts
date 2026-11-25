@@ -142,6 +142,9 @@ export interface LevelInfo {
   visualNoHypothesesTab?: boolean,
   /** The tab Rewrite Mode opens on, by its label (`VisualStartTab`). */
   visualStartTab?: string | null,
+  /** The screens before the level and after it (`VisualPreLevel`, `VisualPostLevel`). */
+  visualPreLevel?: { title?: string; items?: Array<{ name: string; text?: string }>; text?: string } | null,
+  visualPostLevel?: { title?: string; items?: Array<{ name: string; text?: string }>; text?: string } | null,
   /** Uses of a tactic along one branch of the proof (`VisualTacticUses`). */
   visualTacticUses?: Array<{ tactic: string; uses: number }>,
 }

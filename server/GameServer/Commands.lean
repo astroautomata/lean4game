@@ -233,6 +233,53 @@ elab "VisualNoHypothesesTab" : command => do
 elab "VisualStartTab" tab:str : command => do
   modifyCurLevel fun lvl => pure { lvl with visualStartTab? := some tab.getString }
 
+/-- Visual Lean shows a screen before this level is played, over the dimmed level: what
+the player is about to prove, or the theorems and tactics the level brings. This sets
+its title; `VisualPreLevelUnlock` adds a theorem or tactic to it and `VisualPreLevelText`
+a text under them all. Example: `VisualPreLevel "Axioms Unlocked!"` -/
+elab "VisualPreLevel " title:str : command => do
+  modifyCurLevel fun lvl => pure { lvl with
+    visualPreLevel? := some { lvl.visualPreLevel?.getD {} with title := title.getString } }
+
+/-- Add a theorem or tactic to the screen before this level, by the name the player
+knows it by, with what the screen says about it (which the Compendium repeats).
+Example: `VisualPreLevelUnlock add_zero "Eliminate added zeroes, but only on the right."` -/
+elab "VisualPreLevelUnlock " name:ident text:(str)? : command => do
+  let item : VisualInterstitialItem :=
+    { name := name.getId.toString, text := (text.map (·.getString)).getD "" }
+  modifyCurLevel fun lvl => pure { lvl with
+    visualPreLevel? := some (let screen := lvl.visualPreLevel?.getD {}
+      { screen with items := screen.items.push item }) }
+
+/-- The text under everything else on the screen before this level. -/
+elab "VisualPreLevelText " text:str : command => do
+  modifyCurLevel fun lvl => pure { lvl with
+    visualPreLevel? := some { lvl.visualPreLevel?.getD {} with text := text.getString } }
+
+/-- Visual Lean shows a screen once this level is finished, on the way to the next one:
+the theorems and tactics the player has earned. The button that leaves the level reads
+"Finish" then. This sets its title; `VisualPostLevelUnlock` adds a theorem or tactic to
+it and `VisualPostLevelText` a text under them all.
+Example: `VisualPostLevel "Theorem Unlocked!"` -/
+elab "VisualPostLevel " title:str : command => do
+  modifyCurLevel fun lvl => pure { lvl with
+    visualPostLevel? := some { lvl.visualPostLevel?.getD {} with title := title.getString } }
+
+/-- Add a theorem or tactic to the screen after this level, by the name the player
+knows it by, with what the screen says about it (which the Compendium repeats).
+Example: `VisualPostLevelUnlock add_one "Quickly collapse added ones."` -/
+elab "VisualPostLevelUnlock " name:ident text:(str)? : command => do
+  let item : VisualInterstitialItem :=
+    { name := name.getId.toString, text := (text.map (·.getString)).getD "" }
+  modifyCurLevel fun lvl => pure { lvl with
+    visualPostLevel? := some (let screen := lvl.visualPostLevel?.getD {}
+      { screen with items := screen.items.push item }) }
+
+/-- The text under everything else on the screen after this level. -/
+elab "VisualPostLevelText " text:str : command => do
+  modifyCurLevel fun lvl => pure { lvl with
+    visualPostLevel? := some { lvl.visualPostLevel?.getD {} with text := text.getString } }
+
 /-- Limit how often a tactic of Visual Lean's tray can be used along one branch of a
 proof: its card shows the uses left, as `x1`, and once they are spent on a branch it is
 greyed out there and in the branches that come from it. In a level file it applies to

@@ -320,6 +320,21 @@ structure VisualTacticUses where
   uses : Nat
 deriving Inhabited, Repr, ToJson, FromJson
 
+/-- A theorem or tactic shown on a screen before or after a level, by the name the
+player knows it by, with what the screen says about it. -/
+structure VisualInterstitialItem where
+  name : String
+  text : String := ""
+deriving Inhabited, Repr, ToJson, FromJson
+
+/-- A screen Visual Lean shows before a level is played or after it is finished: a
+title, the theorems and tactics it presents, and a text under them all. -/
+structure VisualInterstitial where
+  title : String := ""
+  items : Array VisualInterstitialItem := #[]
+  text : String := ""
+deriving Inhabited, Repr, ToJson, FromJson
+
 /-- Guidance in the specialization view, where a player fills in the variable of a `∀`
 statement. `term` is the term built so far, as displayed, with `?` for each empty slot;
 `none` matches any term. -/
@@ -421,6 +436,10 @@ structure GameLevel where
   visualStartTab? : Option String := none
   /-- How often each of these tactics can be used along one branch of the proof. -/
   visualTacticUses : Array VisualTacticUses := #[]
+  /-- The screen shown before the level is played. -/
+  visualPreLevel? : Option VisualInterstitial := none
+  /-- The screen shown once the level is finished, on the way to the next. -/
+  visualPostLevel? : Option VisualInterstitial := none
 deriving Inhabited, Repr
 
 /-- Json-encodable version of `GameLevel`
@@ -469,6 +488,8 @@ structure LevelInfo where
   visualNoHypothesesTab : Bool := false
   visualStartTab? : Option String := none
   visualTacticUses : Array VisualTacticUses := #[]
+  visualPreLevel? : Option VisualInterstitial := none
+  visualPostLevel? : Option VisualInterstitial := none
 deriving ToJson, FromJson
 
 def GameLevel.toInfo (lvl : GameLevel) (env : Environment) : LevelInfo :=
@@ -525,6 +546,8 @@ def GameLevel.toInfo (lvl : GameLevel) (env : Environment) : LevelInfo :=
     visualNoHypothesesTab := lvl.visualNoHypothesesTab
     visualStartTab? := lvl.visualStartTab?
     visualTacticUses := lvl.visualTacticUses
+    visualPreLevel? := lvl.visualPreLevel?
+    visualPostLevel? := lvl.visualPostLevel?
   }
 
 /-! ## World -/

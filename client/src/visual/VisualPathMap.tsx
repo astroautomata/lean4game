@@ -14,7 +14,6 @@ import type { GameInfo } from '../state/api'
 import { levelCompleted, levelEntered, selectCompleted, selectEntered, selectProgress } from '../state/progress'
 import { store } from '../state/store'
 import { useAppDispatch, useAppSelector } from '../hooks'
-import { getDataBaseUrl } from '../utils/url'
 import { useMapLevelTooltip } from '../components/map_level_tooltip'
 import { plainLevelTitle } from '../components/annotated_level_title'
 import { Markdown } from '../components/markdown'
@@ -28,6 +27,7 @@ import {
   type PathMapNode,
 } from './pathMapLayout'
 import { visualInterfaceScale } from './interfaceScale'
+import { useLevelMeta, type LevelMeta } from './levelMeta'
 import { bonusAnchorsOf, computeVisualProgressFrontier, isVisualLevelUnlocked } from './visualWorldProgress'
 import { CLASSIC_COLOR_OF_SCHEME, NEUTRAL_WORLD_COLOR, WORLD_SCHEMES } from './worldScheme'
 
@@ -54,15 +54,6 @@ const PATH_OUTER_WIDTH = 16
 const PATH_INNER_WIDTH = 10
 const MAP_PADDING = 48
 
-interface LevelMeta {
-  title?: string
-  /** `VisualLevelNumber` label shown in the node. */
-  label?: string
-  textLevel: boolean
-  boss: boolean
-  introduction?: string
-}
-
 /** With the neutral palette a world is drawn in its scheme, and a world with a plain
  * colour or none in grey, as its levels are. */
 function worldColor(name: string, neutral: boolean) {
@@ -70,56 +61,6 @@ function worldColor(name: string, neutral: boolean) {
     ? (WORLD_SCHEME_NAMES.has(name) ? name : NEUTRAL_WORLD_COLOR)
     : WORLD_COLOR_NAMES.has(name) ? name : 'purple'
   return { fill: `rgb(var(--pal-world-${known}))`, edge: `rgb(var(--pal-world-${known}-edge))` }
-}
-
-/** Each game's level metadata, kept for the session: coming back from a level
- * paints the map complete straight away, with no fetch. */
-const levelMetaCache = new Map<string, Record<string, LevelMeta>>()
-
-/** The metadata of every level of a game, or null until it has all arrived. Levels'
- * labels and sizes depend on it, so the map waits rather than paint and correct them. */
-function useLevelMeta(gameId: string, worldSize: Record<string, number> | null | undefined) {
-  const [meta, setMeta] = React.useState<Record<string, LevelMeta> | null>(() => levelMetaCache.get(gameId) ?? null)
-  React.useEffect(() => {
-    if (!worldSize || levelMetaCache.has(gameId)) return
-    const controller = new AbortController()
-    const base = getDataBaseUrl().replace(/\/$/u, '')
-    let complete = true
-    const requests = Object.entries(worldSize).flatMap(([world, size]) =>
-      Array.from({ length: size }, (_, index) => {
-        const level = index + 1
-        return fetch(`${base}/${gameId}/level__${world}__${level}.json`, { signal: controller.signal })
-          .then(response => {
-            if (!response.ok) complete = false
-            return response.ok ? response.json() : null
-          })
-          .then((data: {
-            title?: string | null
-            introduction?: string | null
-            visualLevelNumber?: string | null
-            visualTextLevel?: boolean
-            visualBossLevel?: boolean
-          } | null) => [`${world}:${level}`, {
-            title: data?.title ?? undefined,
-            label: data?.visualLevelNumber ?? undefined,
-            textLevel: Boolean(data?.visualTextLevel),
-            boss: Boolean(data?.visualBossLevel),
-            introduction: data?.introduction ?? undefined,
-          }] as const)
-          .catch(() => {
-            complete = false
-            return [`${world}:${level}`, { textLevel: false, boss: false }] as const
-          })
-      }))
-    void Promise.all(requests).then(entries => {
-      if (controller.signal.aborted) return
-      const next = Object.fromEntries(entries)
-      if (complete) levelMetaCache.set(gameId, next)
-      setMeta(next)
-    })
-    return () => controller.abort()
-  }, [gameId, worldSize])
-  return meta
 }
 
 function PathMapLevel({ node, meta, state, theme, neutral, waitsFor, onOpen }: {
