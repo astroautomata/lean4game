@@ -1985,6 +1985,15 @@ describe('Natural Numbers Video Game', () => {
       const tops = [...$cards].map(card => Math.round(card.getBoundingClientRect().top))
       expect(new Set(tops).size, 'one row').to.equal(1)
     })
+    // The cards are in columns of one width, whatever is said under each: the middle one
+    // is right under the title, and the other two are as far from it on either side.
+    cy.get(screen).find('[data-testid="symbol-card"]').should($cards => {
+      const centre = (element: Element) => { const box = element.getBoundingClientRect(); return box.left + box.width / 2 }
+      const title = centre($cards.closest('.level-interstitial').find('.level-interstitial-title')[0]!)
+      const [left, middle, right] = [...$cards].map(centre)
+      expect(middle, 'the middle card under the title').to.be.closeTo(title, 2)
+      expect(middle! - left!, 'evenly spaced').to.be.closeTo(right! - middle!, 2)
+    })
     cy.get(screen).find('[data-unlock="S(n)"]').should('contain.text', 'The Successor Function')
       .and('contain.text', 'Zero to one, one to two, and onwards forever.')
     cy.get(screen).find('[data-unlock="0"]').should('contain.text', 'here, zero is a natural number')
@@ -2182,6 +2191,9 @@ describe('Natural Numbers Video Game', () => {
     // A list within a list: the kind, the tab the game files it under, and its line
     // with what it says.
     cy.get('[data-section="symbol"] .collection-section-summary').should('contain.text', '4 of 16')
+    // A kind has its name and its count, and no line about it.
+    cy.get('.collection-section-about').should('not.exist')
+    cy.get('[data-section="symbol"] .collection-section-summary').should('not.contain.text', 'written with')
     cy.get('[data-section="symbol"] [data-tab]').should('not.exist')
     cy.get(`[data-section="symbol"] ${entry('S(n)')}`).should('contain.text', 'The Successor Function')
     cy.get('[data-section="equality"] [data-tab="012"]').find(entry('one_eq_succ_zero'))
@@ -3117,6 +3129,14 @@ describe('Natural Numbers Video Game', () => {
       expect(cards, 'cards looked at').to.be.at.least(30)
       expect([...heights], 'card heights').to.have.length(1)
     })
+    // No label of the interface is set in capitals.
+    cy.get('.visual-page *, .proof-sidebar *').should($elements => {
+      const capitals = [...$elements].filter(element => getComputedStyle(element).textTransform === 'uppercase')
+      expect(capitals.map(element => element.className), 'labels in capitals').to.deep.equal([])
+    })
+    // `succ_inj` is on the Peano tab, where the game files it.
+    cy.contains('[data-testid="theorem-category-tabs"] .tr-tab-btn', 'Peano').click()
+    cy.get('[data-testid="theorem-tray-card"][data-theorem-label="succ_inj"]').should('exist')
     // On a PC the row of tabs that ends the menu has more room under its labels than the
     // row above it, for the operating system's own bar.
     cy.get('.theorem-tray-panel .tr-dock-tabs').should($rows => {
