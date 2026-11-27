@@ -28,6 +28,8 @@ export interface VisualWorldNode {
   visualBonusOf?: { world: string, level: number },
   /** The side a bonus world's levels sprout off to (`VisualBonusSide`). */
   visualBonusSide?: 'left' | 'right',
+  /** Worlds this bonus world waits for with no path drawn from them (`VisualNoPathFrom`). */
+  visualNoPathFrom?: string[],
   /** Named path colour (`VisualWorldColor`). */
   visualColor?: string,
   /** Map column: 0 is the centre, negative is left (`VisualMapColumn`). For a bonus
@@ -77,11 +79,15 @@ export interface GameInfo {
   visualNoGoalRfl?: boolean
   /** Theorems shown in the axiom colour (`VisualAxioms`), by full name. */
   visualAxioms?: string[]
+  /** Theorems kept on Proposition Mode's Peano tab (`VisualPeanoTab`). */
+  visualPeanoTab?: string[]
   /** Greys for the base, and the colours of the world being played for the rest
    * (`VisualNeutralPalette`). */
   visualNeutralPalette?: boolean
   /** A level's variables sit in a column of their own (`VisualTypeColumn`). */
   visualTypeColumn?: boolean
+  /** The lower menus have no tab that lists everything (`VisualNoAllTab`). */
+  visualNoAllTab?: boolean
 }
 
 export interface InventoryTile {

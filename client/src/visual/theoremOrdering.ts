@@ -10,7 +10,7 @@ export {
   TRANSFORM_THEOREM_ORDER,
 } from './theoremOrder.generated.js'
 
-export type TheoremBucket = 'peano' | 'add' | 'ne' | 'le' | 'mul' | 'other'
+export type TheoremBucket = 'peano' | 'add' | 'ne' | 'le' | 'gt' | 'mul' | 'other'
 
 // The tray renders `All` first and then these in order, so the Peano axioms
 // sit immediately to its right: they underpin every other world rather than
@@ -24,6 +24,7 @@ export const THEOREM_BUCKETS: ReadonlyArray<{ id: TheoremBucket; label: string }
   { id: 'add', label: '+' },
   { id: 'ne', label: '≠' },
   { id: 'le', label: '≤' },
+  { id: 'gt', label: '>' },
   { id: 'mul', label: '*' },
 ]
 
@@ -72,14 +73,17 @@ export function compareCombiningTheoremNames(
     || leftName.localeCompare(rightName)
 }
 
+/** `peanoTab`: theorems the game keeps on the Peano tab besides the two that are
+ * always there (`VisualPeanoTab`), by their full names or the last part of them. */
 export function theoremBucket(theorem: {
   category?: string
   theoremName?: string
   label?: string
   proposition?: string
-}): TheoremBucket {
+}, peanoTab: readonly string[] = []): TheoremBucket {
   const category = theorem.category?.trim()
   const searchable = `${theorem.theoremName ?? ''} ${theorem.label ?? ''} ${theorem.proposition ?? ''}`
+  if (peanoTab.some(name => baseName(name) === baseName(theorem.theoremName ?? ''))) return 'peano'
 
   // NNG4 files several theorems under `Peano` for classic mode's tabs, but the
   // visual tab is meant for the two foundational facts only. Everything else
@@ -91,6 +95,8 @@ export function theoremBucket(theorem: {
   if (category === '*' || /(?:^|[._\s])mul(?:[._\s]|$)|\*/u.test(searchable)) return 'mul'
   if (category === '+') return 'add'
   if (category === '≤' || category === '<=') return 'le'
+  // A game's own `>` tab keeps what it files there, whatever the statement looks like.
+  if (category === '>') return 'gt'
   if (category === '≠' || category === '!=') return 'ne'
   if (/(?:^|[._\s])(?:reflection|succ_inj)(?:[._\s]|$)|(?:^|[._\s])add(?:[._\s]|$)|\+/u.test(searchable)) return 'add'
   if (/(?:^|[._\s])le(?:[._\s]|$)|≤/u.test(searchable)) return 'le'

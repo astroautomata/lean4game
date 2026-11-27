@@ -327,13 +327,43 @@ structure VisualInterstitialItem where
   text : String := ""
 deriving Inhabited, Repr, ToJson, FromJson
 
-/-- A screen Visual Lean shows before a level is played or after it is finished: a
-title, the theorems and tactics it presents, and a text under them all. -/
-structure VisualInterstitial where
+/-- A symbol shown on a screen before or after a level: the symbol itself (`∀`,
+`S(n)`), what it is called, and what the screen says about it. -/
+structure VisualInterstitialSymbol where
+  symbol : String
+  name : String := ""
+  text : String := ""
+deriving Inhabited, Repr, ToJson, FromJson
+
+/-- One page of a screen before or after a level: a title, the symbols, theorems and
+tactics it presents, and a text under them all. -/
+structure VisualInterstitialPage where
   title : String := ""
+  symbols : Array VisualInterstitialSymbol := #[]
   items : Array VisualInterstitialItem := #[]
   text : String := ""
 deriving Inhabited, Repr, ToJson, FromJson
+
+/-- A screen Visual Lean shows before a level is played or after it is finished: its
+first page, and the pages that follow it one by one (`more`). -/
+structure VisualInterstitial extends VisualInterstitialPage where
+  more : Array VisualInterstitialPage := #[]
+deriving Inhabited, Repr, ToJson, FromJson
+
+/-- Change the last page of a screen, the one the commands are writing. -/
+def VisualInterstitial.modifyLastPage (screen : VisualInterstitial)
+    (f : VisualInterstitialPage → VisualInterstitialPage) : VisualInterstitial :=
+  if screen.more.isEmpty then
+    { screen with toVisualInterstitialPage := f screen.toVisualInterstitialPage }
+  else
+    { screen with more := screen.more.modify (screen.more.size - 1) f }
+
+/-- Give a screen's last page its title, or start a new page with it if that page has
+one already. -/
+def VisualInterstitial.withTitle (screen : VisualInterstitial) (title : String) : VisualInterstitial :=
+  let last := screen.more.back?.getD screen.toVisualInterstitialPage
+  if last.title.isEmpty then screen.modifyLastPage ({ · with title := title })
+  else { screen with more := screen.more.push { title := title } }
 
 /-- Guidance in the specialization view, where a player fills in the variable of a `∀`
 statement. `term` is the term built so far, as displayed, with `?` for each empty slot;
@@ -572,6 +602,9 @@ structure World where
   /-- Visual Lean path map: the side a bonus world's levels sprout off to, `left` or
   `right` (see `VisualBonusSide`). Away from the centre when unset. -/
   visualBonusSide? : Option String := none
+  /-- Visual Lean path map: worlds this bonus world waits for whose paths into it are
+  not drawn (see `VisualNoPathFrom`). -/
+  visualNoPathFrom : Array Name := #[]
   /-- Visual Lean path map: named colour of this world's path. -/
   visualColor? : Option String := none
   /-- Visual Lean path map: column of this world's path (0 = centre, negative = left).
@@ -611,6 +644,8 @@ instance : ToJson World := ⟨
     (match world.visualBonusSide? with
       | some side => [("visualBonusSide", toJson side)]
       | none => []) ++
+    (if world.visualNoPathFrom.isEmpty then []
+      else [("visualNoPathFrom", toJson world.visualNoPathFrom)]) ++
     (match world.visualColor? with
       | some color => [("visualColor", toJson color)]
       | none => []) ++
@@ -713,12 +748,18 @@ structure Game where
   /-- Theorems that Visual Lean shows in the axiom colour, whatever inventory tab they
   are filed under (see `VisualAxioms`). -/
   visualAxioms : Array Name := #[]
+  /-- Theorems filed under `Peano` that Visual Lean's Proposition Mode keeps on its Peano
+  tab (see `VisualPeanoTab`). -/
+  visualPeanoTab : Array Name := #[]
   /-- When true, Visual Lean has one scheme, drawn in the page and colours of the world
   being played (see `VisualNeutralPalette`). -/
   visualNeutralPalette : Bool := false
   /-- When true, Visual Lean keeps a level's variables in a column of their own (see
   `VisualTypeColumn`). -/
   visualTypeColumn : Bool := false
+  /-- When true, Visual Lean's lower menus have no tab that lists everything (see
+  `VisualNoAllTab`). -/
+  visualNoAllTab : Bool := false
   /-- How often a tactic can be used along one branch of a proof, in every level that
   has no count of its own or of its world's (see `VisualTacticUses`). -/
   visualTacticUses : Array VisualTacticUses := #[]
@@ -769,6 +810,7 @@ def World.merge (old : World) (new : World) : World :=
   -- settings that were made in another module.
   visualBonusOf? := new.visualBonusOf? <|> old.visualBonusOf?
   visualBonusSide? := new.visualBonusSide? <|> old.visualBonusSide?
+  visualNoPathFrom := if new.visualNoPathFrom.isEmpty then old.visualNoPathFrom else new.visualNoPathFrom
   visualColor? := new.visualColor? <|> old.visualColor?
   visualMapColumn? := new.visualMapColumn? <|> old.visualMapColumn?
   visualMapUnder? := new.visualMapUnder? <|> old.visualMapUnder?

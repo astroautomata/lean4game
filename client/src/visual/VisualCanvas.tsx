@@ -2583,6 +2583,10 @@ interface VisualCanvasProps {
    * tab beside Reset and Undo (`VisualTypeColumn`). Not in the phone's portrait
    * layout, which has its own column. */
   typeColumn?: boolean
+  /** The lower menus have no tab that lists everything (`VisualNoAllTab`). */
+  noAllTab?: boolean
+  /** Theorems the game keeps on Proposition Mode's Peano tab (`VisualPeanoTab`). */
+  peanoTab?: string[]
   /** `cases` and `induction` on `a` name the new number `a1`, not `d`
    * (`VisualNumberedSplits`). */
   numberedSplits?: boolean
@@ -2631,7 +2635,18 @@ function TheoremTray({
   emphasizeItems,
   tacticUsesLeft,
   branchOpen = true,
+  noAllTab = false,
+  hintedTheorems,
+  peanoTab,
 }: {
+  /** Theorems the game keeps on the Peano tab (`VisualPeanoTab`). */
+  peanoTab?: string[]
+  /** No "All" among the theorems' tabs (`VisualNoAllTab`): the first tab with a
+   *  theorem in it is the one shown. */
+  noAllTab?: boolean
+  /** The theorems the hints on screen point at, by name or label: without an "All" tab
+   *  the first of them brings up the tab and the page it is on. */
+  hintedTheorems?: string[]
   /** Uses left on the current branch, for tactics with a limit (`VisualTacticUses`). */
   tacticUsesLeft?: Record<string, number>
   /** The branch being looked at still has a goal to prove. */
@@ -2659,23 +2674,35 @@ function TheoremTray({
       : activeTab === 'theorems' && theorems.length > 0
         ? 'theorems'
         : availableTabs[0]
-  const [theoremCategory, setTheoremCategory] = useState<'all' | TheoremBucket>('all')
-  const populatedTheoremBuckets = React.useMemo(() => THEOREM_BUCKETS
-    .filter(bucket => theorems.some(theorem => theoremBucket(theorem) === bucket.id)), [theorems])
+  const [pickedTheoremCategory, setTheoremCategory] = useState<'all' | TheoremBucket>('all')
+  const populatedTheoremBuckets = React.useMemo(() => {
+    const populated: Array<{ id: TheoremBucket; label: string }> = THEOREM_BUCKETS
+      .filter(bucket => theorems.some(theorem => theoremBucket(theorem, peanoTab) === bucket.id))
+    // Without an "All" tab, the theorems that belong to none of these get a tab of
+    // their own: under the name the game files them all under, if it is one name.
+    const rest = noAllTab ? theorems.filter(theorem => theoremBucket(theorem, peanoTab) === 'other') : []
+    if (rest.length > 0) {
+      const filed = new Set(rest.map(theorem => theorem.category?.trim() ?? ''))
+      populated.push({ id: 'other', label: filed.size === 1 && !filed.has('') ? [...filed][0]! : 'Other' })
+    }
+    return populated
+  }, [noAllTab, peanoTab, theorems])
   const showTheoremCategories = populatedTheoremBuckets.length > 1
+  // Without an "All" tab the theorems open on the first tab that has any.
+  const theoremCategory: 'all' | TheoremBucket =
+    populatedTheoremBuckets.some(bucket => bucket.id === pickedTheoremCategory)
+      ? pickedTheoremCategory
+      : noAllTab ? (populatedTheoremBuckets[0]?.id ?? 'all') : 'all'
   useEffect(() => {
-    if (
-      theoremCategory !== 'all' &&
-      !populatedTheoremBuckets.some(bucket => bucket.id === theoremCategory)
-    ) setTheoremCategory('all')
-  }, [populatedTheoremBuckets, theoremCategory])
+    if (pickedTheoremCategory !== theoremCategory) setTheoremCategory(theoremCategory)
+  }, [pickedTheoremCategory, theoremCategory])
   const visibleTheorems = React.useMemo(() => {
     const filtered = theoremCategory === 'all'
       ? theorems
-      : theorems.filter(theorem => theoremBucket(theorem) === theoremCategory)
+      : theorems.filter(theorem => theoremBucket(theorem, peanoTab) === theoremCategory)
     // Every view is a stable subset of the single editable global order.
     return [...filtered].sort(compareCombiningTheoremNames)
-  }, [theoremCategory, theorems])
+  }, [peanoTab, theoremCategory, theorems])
   const items: (PropositionTheorem | VisualTactic)[] =
     visibleTab === 'tactics' ? tactics : visibleTab === 'theorems' ? visibleTheorems : []
 
@@ -2755,6 +2782,36 @@ function TheoremTray({
       if (!visibleTab) return
       onPageIndexChange(visibleTab, page)
     },
+  })
+
+  // Without an "All" tab, a hint that points at a theorem's card brings up the tab the
+  // card is filed under, once for each hint: the player can still look elsewhere.
+  const hintedTheoremKey = noAllTab ? (hintedTheorems ?? []).join('\n') : ''
+  const hintedTheorem = React.useMemo(() => {
+    const names = hintedTheoremKey ? hintedTheoremKey.split('\n') : []
+    return theorems.find(theorem => names.some(name =>
+      theorem.theoremName === name || theorem.label === name || theorem.theoremName?.endsWith(`.${name}`)))
+  }, [hintedTheoremKey, theorems])
+  const shownHintedTheoremRef = useRef('')
+  useEffect(() => {
+    if (!hintedTheorem || shownHintedTheoremRef.current === hintedTheoremKey) return
+    shownHintedTheoremRef.current = hintedTheoremKey
+    const bucket = theoremBucket(hintedTheorem, peanoTab)
+    if (bucket !== theoremCategory) {
+      setTheoremCategory(bucket)
+      onPageIndexChange('theorems', 0)
+    }
+  }, [hintedTheorem, hintedTheoremKey, onPageIndexChange, theoremCategory])
+  // Then the page of that tab the card is on, once the cards have been measured.
+  const pagedHintedTheoremRef = useRef('')
+  useEffect(() => {
+    if (!hintedTheorem || visibleTab !== 'theorems' || !hasMeasurements) return
+    if (pagedHintedTheoremRef.current === hintedTheoremKey) return
+    const index = items.findIndex(item => item.id === hintedTheorem.id)
+    if (index < 0) return
+    pagedHintedTheoremRef.current = hintedTheoremKey
+    const page = pages.findIndex(range => index >= range.start && index < range.end)
+    if (page >= 0 && page !== clampedPage) onPageIndexChange('theorems', page)
   })
 
   if (!hasTray) return null
@@ -2845,7 +2902,7 @@ function TheoremTray({
       {visibleTab === 'theorems' && showTheoremCategories && (
         <div className="tr-dock-tabs tr-theorem-category-tabs" data-testid="theorem-category-tabs">
           {[
-            { id: 'all' as const, label: 'All' },
+            ...(noAllTab ? [] : [{ id: 'all' as const, label: 'All' }]),
             ...populatedTheoremBuckets,
           ].map(tab => (
             <button
@@ -2893,7 +2950,7 @@ export function VisualCanvas({
   rewriteOnly = false, hideRewriteDirection = false, hideSwapSides = false, noRewriteMode = false,
   noRewriteTabs = false, noHypothesesTab = false, startTab, tacticUses,
   emphasizeForall, mulDot = false, gameFastExfalso = false, typeColumn = false,
-  numberedSplits = false,
+  numberedSplits = false, noAllTab = false, peanoTab,
 }: VisualCanvasProps) {
   const { isVisualAutoBranchSwitching, isVisualFastExfalso } =
     React.useContext(PreferencesContext)
@@ -6772,6 +6829,12 @@ export function VisualCanvas({
     () => proofGraphVisible ? withText(canvasHints.graph) : [],
     [canvasHints.graph, proofGraphVisible],
   )
+  // The theorems that hints point at (`TheoremTray` brings up their tab where the game
+  // has no "All" tab).
+  const hintedTheorems = React.useMemo(() => [
+    ...activeTheoremInfos.map(info => info.hyp),
+    ...activeHypGoalInfos.map(info => info.hyp),
+  ], [activeHypGoalInfos, activeTheoremInfos])
   // A hint pointing at a theorem card brings the theorems into view.
   const theoremHintOpenedTrayRef = useRef(false)
   useEffect(() => {
@@ -8339,6 +8402,9 @@ export function VisualCanvas({
               emphasizeItems={emphasizeItems}
               tacticUsesLeft={tacticUsesLeft}
               branchOpen={currentStreamIsLive && !canvasState.completed}
+              noAllTab={noAllTab}
+              hintedTheorems={hintedTheorems}
+              peanoTab={peanoTab}
             />
             {!isPhonePortrait && tacticHypGuides.map((guide, index) => (
               <React.Fragment key={`${guide.info.tactic}-${guide.info.hyp}-${index}`}>
@@ -8474,6 +8540,10 @@ export function VisualCanvas({
               </div>
             </section>
           )}
+        </div>
+        {/* The card being dragged, in a layer above the proof panel (`visual-drag-layer`);
+            it is styled as a card of this page. */}
+        <div className={`visual-page visual-drag-layer${isPhonePortrait ? ' phone-portrait' : ''}${typeColumnLayout ? ' type-column-layout' : ''}`}>
           <DragOverlay dropAnimation={null}>
             {activeDraggedHyp
               ? <HypCardPreviewCard card={activeDraggedHyp} iffDirection={getIffDirection(activeDraggedHyp.id)} />
@@ -8521,6 +8591,7 @@ export function VisualCanvas({
           successorName={successorName}
           visualInfos={constructionTarget?.kind === 'forall_spec' ? constructionInfos : undefined}
           persistentHints={persistentHints}
+          noAllTab={noAllTab}
           isPhonePortrait={isPhonePortrait}
           controlsSlot={proofTab}
           onApply={handleConstructionApply}
@@ -8576,6 +8647,7 @@ export function VisualCanvas({
           hideSwapSides={hideSwapSides}
           noTabs={noRewriteTabs}
           noHypothesesTab={noHypothesesTab}
+          noAllTab={noAllTab}
           emphasizeForall={emphasizeForall}
           onCheck={goalCheckAvailable ? handleRewriteCheck : undefined}
           completed={canvasState.completed}

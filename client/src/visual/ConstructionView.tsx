@@ -354,17 +354,22 @@ interface Props {
   visualInfos?: VisualSpecializationInfo[]
   /** Hints stay up after the step they were written for (`VisualPersistentHints`). */
   persistentHints?: boolean
+  /** No "Everything" tab (`VisualNoAllTab`): the bricks open on the variables, or on
+   *  the numbers where there are none, and a hint that points at a brick brings up the
+   *  brick's tab. */
+  noAllTab?: boolean
 }
 
 export function ConstructionView({
   varName, goalBody, contextVarNames, onApply, onClose, isProcessing,
   promptMode = 'propose', mode = 'nat', style, headerSlot, controlsSlot, isPhonePortrait = false, initialTerm,
-  successorName = 'succ', visualInfos = [], persistentHints = false,
+  successorName = 'succ', visualInfos = [], persistentHints = false, noAllTab = false,
 }: Props) {
   const [term, setTerm] = useState<ConstructionTerm>(() => initialTerm ?? makeSlot())
   const [history, setHistory] = useState<ConstructionTerm[]>([])
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
-  const [selectedTab, setSelectedTab] = useState<CnTab>('everything')
+  const [selectedTab, setSelectedTab] = useState<CnTab>(() =>
+    noAllTab ? (contextVarNames.length > 0 ? 'variables' : 'numbers') : 'everything')
   const [isDoneProcessing, setIsDoneProcessing] = useState(false)
   const [doneError, setDoneError] = useState(false)
   const [activeBrickId, setActiveBrickId] = useState<string | null>(null)
@@ -563,7 +568,7 @@ export function ConstructionView({
   })
 
   const TABS: { id: CnTab; label: string; disabled?: boolean }[] = [
-    { id: 'everything', label: 'Everything' },
+    ...(noAllTab ? [] : [{ id: 'everything' as CnTab, label: 'Everything' }]),
     { id: 'variables',  label: 'Variables', disabled: varBricks.length === 0 },
     { id: 'numbers',    label: mode === 'prop' ? 'Constants' : 'Numbers' },
     { id: 'functions',  label: mode === 'prop' ? 'Connectives' : 'Functions' },
@@ -580,6 +585,13 @@ export function ConstructionView({
     persistentHints, history.length, matchingInfos, infos => infos.length === 0, infos => infos,
   ))
   const guideInfo = shownInfos[0]
+  // Without an "Everything" tab, a hint that points at a brick brings up the brick's tab.
+  const hintedBrick = noAllTab && guideInfo?.kind === 'brick' ? guideInfo.brick ?? '' : ''
+  useEffect(() => {
+    if (!hintedBrick) return
+    const brick = allBricks.find(candidate => compactText(candidate.label) === compactText(hintedBrick))
+    if (brick) setSelectedTab(brick.tab)
+  }, [hintedBrick])
   const mainAreaRef = useRef<HTMLDivElement>(null)
   const doneButtonRef = useRef<HTMLButtonElement>(null)
   const lessonRef = useRef<HTMLDivElement>(null)
@@ -800,6 +812,7 @@ export function ConstructionView({
               <button
                 key={tab.id}
                 className={`tr-tab-btn${selectedTab === tab.id ? ' active' : ''}`}
+                data-tab={tab.id}
                 onClick={() => { if (!tab.disabled) setSelectedTab(tab.id) }}
                 disabled={tab.disabled}
               >
@@ -809,6 +822,9 @@ export function ConstructionView({
           </div>
         </div>
 
+      </div>
+      {/* The brick being dragged, in a layer above the proof panel (`visual-drag-layer`). */}
+      <div className={`visual-page visual-drag-layer${isPhonePortrait ? ' phone-portrait' : ''}`}>
         <DragOverlay dropAnimation={null}>
           {activeBrickDef
             ? <div className="cn-brick"><span className="cn-brick-label proposition">{activeBrickDef.label}</span></div>

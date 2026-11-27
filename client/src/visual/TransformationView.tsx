@@ -15,6 +15,7 @@ import { useHorizontalSwipe, useSwipePaging } from './useSwipePaging'
 import { packAdaptivePages, renderedCardGap } from './adaptivePagination'
 import type { VisualTransformInfo } from './types'
 import { usePersistentHints } from './hintPersistence'
+import { buildEqualityTheoremDisplay } from './quantifiedStatement'
 import { compareTheoremNames } from './theoremOrdering'
 
 let transformationViewInstanceCounter = 0
@@ -293,6 +294,23 @@ export function parseEqualityHyp(typeStr: string, hypName: string, hypId: string
   }
 }
 
+/** Parse an NNG4 theorem statement like " (a d : ℕ) : a + MyNat.succ d = MyNat.succ (a + d)"
+ *  by stripping the argument prefix and normalizing Lean notation for the arithmetic parser. */
+export function parseTheoremStatement(
+  statement: string,
+  displayName: string,
+  thmName: string,
+): (EqualityHyp & { forallFooter?: string }) | null {
+  const theoremDisplay = buildEqualityTheoremDisplay(statement)
+  let body = theoremDisplay.mainText
+  body = body
+    .replace(/\bsucc\s+(\d+)\b/g, 'succ($1)')
+    .replace(/\bsucc\s+\(/g, 'succ(')
+    .replace(/\bsucc\s+([a-zA-Z]\w*)/g, 'succ($1)')
+  const parsed = parseEqualityHyp(body, displayName, thmName)
+  return parsed ? { ...parsed, forallFooter: theoremDisplay.forallFooter } : null
+}
+
 interface Props {
   relation: TransformRelation
   goalLhsStr: string
@@ -361,6 +379,9 @@ interface Props {
   noTabs?: boolean
   /** No tab for the hypotheses alone (`VisualNoHypothesesTab`). */
   noHypothesesTab?: boolean
+  /** No "Everything" tab (`VisualNoAllTab`): the view opens on the first tab with a
+   *  rule in it, and a hint that points at a rule brings up the rule's tab. */
+  noAllTab?: boolean
   /** Labels of rule cards whose `∀ …` footer is highlighted. */
   emphasizeForall?: string[]
   /** Called when the player clicks the check mark; resolves to whether Lean
@@ -404,10 +425,10 @@ const REMEASURE_BURSTS = 5
 export function TransformationView({
   relation, goalLhsStr, goalRhsStr, goalLhsNode, goalRhsNode, equalityHyps, theoremEqualityHyps,
   onRewrite, onUndo, canUndo, onReset, canReset, onSwap, onClose, isReverse, onIsReverseChange,
-  selectedTab, onSelectedTabChange, pageIndexByTab, onPageIndexChange, rewriteStepCount, headerSlot, controlsSlot, style,
+  selectedTab: requestedTab, onSelectedTabChange, pageIndexByTab, onPageIndexChange, rewriteStepCount, headerSlot, controlsSlot, style,
   isPhonePortrait = false, emphasizeItems, axioms, visualInfos = [],
   rewriteOnly = false, hideRewriteDirection = false, hideSwapSides = false, emphasizeForall, onCheck, completed = false,
-  rewriteCheck = false, persistentHints = false, noTabs = false, noHypothesesTab = false, reviewOnly = false,
+  rewriteCheck = false, persistentHints = false, noTabs = false, noHypothesesTab = false, noAllTab = false, reviewOnly = false,
 }: Props) {
   const instanceIdRef = useRef(++transformationViewInstanceCounter)
   const initialLhs = useCallback(() => {
@@ -605,21 +626,32 @@ export function TransformationView({
         hasUncategorized = true
       }
     })
-    const result: { id: string; label: string }[] = [{ id: 'all', label: 'Everything' }]
+    const everything = { id: 'all', label: 'Everything' }
     // With one tab there is no tab bar: every rule is in one list.
-    if (noTabs) return result
-    if (!noHypothesesTab) result.push({ id: 'hyps', label: 'Hypotheses' })
+    if (noTabs) return [everything]
+    const result: { id: string; label: string }[] = noAllTab ? [] : [everything]
+    // Without the tab that lists everything, a level's hypotheses have no other place.
+    const hasHyps = allRules.some(r => r.dragId.startsWith('hyp_'))
+    if (!noHypothesesTab || (noAllTab && hasHyps)) result.push({ id: 'hyps', label: 'Hypotheses' })
     catOrder.forEach(cat => result.push({ id: cat, label: cat }))
     if (hasUncategorized) result.push({ id: 'other', label: 'Other' })
-    return result
-  }, [allRules, noHypothesesTab, noTabs])
+    return result.length > 0 ? result : [everything]
+  }, [allRules, noAllTab, noHypothesesTab, noTabs])
 
-  // Clamp selectedTab to a valid tab when tabs change
+  /** The tab a rule is filed under. */
+  const tabOfRule = (rule: { dragId: string; category?: string }) =>
+    rule.dragId.startsWith('hyp_') ? 'hyps' : rule.category || 'other'
+
+  // The tab shown: the one asked for while it exists, and otherwise the first one,
+  // or without an "Everything" tab the first that has a rule in it.
+  const selectedTab = useMemo(() => {
+    if (tabs.some(tab => tab.id === requestedTab)) return requestedTab
+    const first = tabs.find(tab => tab.id === 'all' || allRules.some(rule => tabOfRule(rule) === tab.id))
+    return (first ?? tabs[0])?.id ?? 'hyps'
+  }, [allRules, requestedTab, tabs])
   useEffect(() => {
-    if (!tabs.find(t => t.id === selectedTab)) {
-      onSelectedTabChange(tabs[0]?.id ?? 'hyps')
-    }
-  }, [tabs, selectedTab])
+    if (requestedTab !== selectedTab) onSelectedTabChange(selectedTab)
+  }, [requestedTab, selectedTab])
 
   // Filter rules by the selected tab
   const tabRules = useMemo(() => {
@@ -943,6 +975,27 @@ export function TransformationView({
     () => activeVisualInfos.filter(info => info.kind === 'rewrite' && info.text),
     [activeVisualInfos],
   )
+  // Without an "Everything" tab, a hint that points at a rule brings up the tab the
+  // rule is on, once for each hint: the player can still look elsewhere.
+  const hintedRuleKey = noAllTab && !noTabs
+    ? rewriteInfos.map(info => info.source?.trim() ?? '').filter(Boolean).join('\n')
+    : ''
+  const shownHintedRuleRef = useRef('')
+  useEffect(() => {
+    if (!hintedRuleKey || shownHintedRuleRef.current === hintedRuleKey) return
+    const labels = hintedRuleKey.split('\n').flatMap(label => [label, sanitizeLeanDisplayName(label)])
+    const rule = allRules.find(candidate => labels.includes(candidate.label) || labels.includes(candidate.id))
+    if (!rule) return
+    shownHintedRuleRef.current = hintedRuleKey
+    const tab = tabOfRule(rule)
+    if (tab !== selectedTab && tabs.some(candidate => candidate.id === tab)) {
+      onSelectedTabChange(tab)
+      setHoveredId(null)
+    }
+  }, [allRules, hintedRuleKey, selectedTab, tabs])
+  // An emphasized rule on a tab that isn't the one shown lights that tab up.
+  const tabHasEmphasis = (tabId: string) => tabId !== 'all' && tabId !== selectedTab
+    && allRules.some(rule => isEmphasizedRule(rule) && tabOfRule(rule) === tabId)
 
   useLayoutEffect(() => {
     if (!isPhonePortrait) {
@@ -1864,7 +1917,8 @@ export function TransformationView({
               {tabs.map(tab => (
                 <button
                   key={tab.id}
-                  className={`tr-tab-btn${selectedTab === tab.id ? ' active' : ''}`}
+                  className={`tr-tab-btn${selectedTab === tab.id ? ' active' : ''}${tabHasEmphasis(tab.id) ? ' visual-emphasize-btn' : ''}`}
+                  data-tab={tab.id}
                   onClick={() => { if (isProcessing) return; onSelectedTabChange(tab.id); setHoveredId(null) }}
                   aria-disabled={isProcessing}
                 >

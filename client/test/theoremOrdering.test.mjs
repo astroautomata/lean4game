@@ -133,3 +133,20 @@ test('Peano axioms get their own bucket, first after All', () => {
   assert.equal(theoremBucket({ category: '+', theoremName: 'MyNat.add_comm' }), 'add')
   assert.equal(theoremBucket({ category: '*', theoremName: 'MyNat.mul_comm' }), 'mul')
 })
+
+test('the > tab of a game keeps what is filed there', () => {
+  assert.equal(theoremBucket({ category: '>', theoremName: 'lt_succ_self', proposition: 'S n > n' }), 'gt')
+  // Its statement has a `≤` in it, and its name an `le`.
+  assert.equal(theoremBucket({ category: '>', theoremName: 'leq_le', proposition: 'a ≤ b → a = b ∨ b > a' }), 'gt')
+  assert.deepEqual(THEOREM_BUCKETS.map(bucket => bucket.label), ['Peano', '+', '≠', '≤', '>', '*'])
+})
+
+test('a game can keep more of its Peano theorems on the Peano tab', () => {
+  const succInj = { category: 'Peano', theoremName: 'MyNat.succ_inj', proposition: 'S(a) = S(b) → a = b' }
+  // By itself `succ_inj` stays with the `+` theorems, as in NNG4.
+  assert.equal(theoremBucket(succInj), 'add')
+  assert.equal(theoremBucket(succInj, ['MyNat.succ_inj']), 'peano')
+  assert.equal(theoremBucket(succInj, ['succ_inj']), 'peano')
+  // Naming one theorem moves no other.
+  assert.equal(theoremBucket({ category: 'Peano', theoremName: 'MyNat.zero_ne_succ', proposition: '0 ≠ S(a)' }, ['MyNat.succ_inj']), 'ne')
+})

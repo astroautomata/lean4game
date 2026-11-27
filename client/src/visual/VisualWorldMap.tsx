@@ -46,7 +46,7 @@ import { useTranslation } from 'react-i18next'
 import { VISUAL_PROOF_AUTOSAVE_VERSION } from './visualAutosave'
 import { bonusAnchorsOf, computeVisualProgressFrontier, isVisualLevelUnlocked } from './visualWorldProgress'
 import { VisualPathMap } from './VisualPathMap'
-import { Compendium, useCompendium } from './Compendium'
+import { Collection, useCollection } from './Collection'
 import { getConsentState, setConsent } from '../utils/telemetry'
 import './visual.css'
 
@@ -479,7 +479,7 @@ function VisualMapAppBar({
   onNextVisualStyle,
   isLightMode,
   onToggleLightMode,
-  onOpenCompendium,
+  onOpenCollection,
 }: {
   gameTitle: string
   autoBranchSwitching: boolean
@@ -500,8 +500,8 @@ function VisualMapAppBar({
   /** Only the games that offer the light scheme pass this: those with a path map,
    * but not with the neutral palette, which has one scheme. */
   onToggleLightMode?: () => void
-  /** Passed once the player has something in the Compendium to look at. */
-  onOpenCompendium?: () => void
+  /** Passed once the player has something in the Collection to look at. */
+  onOpenCollection?: () => void
 }) {
   const { t } = useTranslation()
   const gameId = React.useContext(GameIdContext)
@@ -539,14 +539,14 @@ function VisualMapAppBar({
             <FontAwesomeIcon icon={toIconProp(isLightMode ? faSun : faMoon)} />
           </button>
         )}
-        {onOpenCompendium && (
+        {onOpenCollection && (
           <button
             type="button"
-            className="visual-map-compendium-btn"
-            data-testid="compendium-button"
-            onClick={onOpenCompendium}
+            className="visual-map-collection-btn"
+            data-testid="collection-button"
+            onClick={onOpenCollection}
           >
-            Compendium
+            Collection
           </button>
         )}
         <VisualMapMenuButton />
@@ -1022,10 +1022,10 @@ export function VisualWorldMap({ levelMode = 'visual' }: { levelMode?: MapLevelM
     return () => controller.abort()
   }, [gameId, gameInfo.data])
 
-  // The Compendium (experimental), for games with a path map: its button is there once
+  // The Collection (experimental), for games with a path map: its button is there once
   // the player has something in it.
-  const compendium = useCompendium(gameInfo.data, isVisualFullComplete)
-  const [compendiumOpen, setCompendiumOpen] = React.useState(false)
+  const collection = useCollection(gameInfo.data, isVisualFullComplete)
+  const [collectionOpen, setCollectionOpen] = React.useState(false)
 
   if (!gameInfo.data) {
     return (
@@ -1061,7 +1061,7 @@ export function VisualWorldMap({ levelMode = 'visual' }: { levelMode?: MapLevelM
             setIsVisualLightMode(!isVisualLightMode)
           }
         : undefined}
-      onOpenCompendium={compendium.unlocked.size > 0 && !compendiumOpen ? () => setCompendiumOpen(true) : undefined}
+      onOpenCollection={collection.unlocked.size > 0 && !collectionOpen ? () => setCollectionOpen(true) : undefined}
     />
   )
 
@@ -1070,8 +1070,8 @@ export function VisualWorldMap({ levelMode = 'visual' }: { levelMode?: MapLevelM
     return (
       <div className="visual-page visual-map-page">
         {appBar}
-        {compendiumOpen
-          ? <Compendium gameInfo={gameInfo.data} state={compendium} onClose={() => setCompendiumOpen(false)} />
+        {collectionOpen
+          ? <Collection gameInfo={gameInfo.data} state={collection} onClose={() => setCollectionOpen(false)} />
           : <VisualPathMap
               gameInfo={gameInfo.data}
               openAnyLevel={isVisualOpenAnyLevel}

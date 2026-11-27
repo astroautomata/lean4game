@@ -1442,6 +1442,18 @@
   text-align: center;
 }
 
+/* A card with its name on a line of its own is as wide as the wider of its lines, not
+   as wide as the two would be side by side. (A phone held upright lists its cards.) */
+.visual-page:not(.phone-portrait) .statement-card.theorem-card-break-after-label .statement-card-main {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.visual-page:not(.phone-portrait) .statement-card.theorem-card-break-after-label .statement-card-main > .proposition {
+  flex-basis: auto;
+  width: auto;
+}
+
 .visual-page .statement-card-label {
   display: inline-flex;
   align-items: baseline;
@@ -1473,11 +1485,9 @@
 }
 
 .visual-page .goal-prefix {
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--visual-goal-label);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   margin-bottom: 0.4rem;
   font-family: var(--font-family), system-ui, sans-serif;
 }
@@ -1637,10 +1647,8 @@
 }
 
 .visual-page .or-tooltip-label {
-  font-size: 0.65rem;
+  font-size: 0.74rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--visual-choice-label);
 }
 
@@ -1695,10 +1703,8 @@
 }
 
 .visual-page .defeq-tooltip-label {
-  font-size: 0.65rem;
+  font-size: 0.74rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--visual-info);
   font-family: var(--font-family), system-ui, sans-serif;
 }
@@ -1862,8 +1868,9 @@
    upright lists its cards instead, each as tall as it needs. A card picked up from
    the menu keeps this look while it is carried (`theorem-tray-held`): set at its
    usual size in the menu card's width, its lines would wrap and reach back down
-   over the menu, where letting go puts the card away. */
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .statement-card.theorem-tray-card, .statement-card.theorem-tray-held) {
+   over the menu, where letting go puts the card away. And it keeps it on the canvas,
+   where it is let go (`theorem-copy-card`): the same card, not a larger one. */
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .statement-card.theorem-tray-card, .statement-card.theorem-tray-held, .statement-card.theorem-copy-card) {
   box-sizing: border-box;
   height: 5.25rem;
   padding-block: 0.3rem;
@@ -1871,44 +1878,44 @@
   flex-direction: column;
   justify-content: center;
 }
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held) .statement-card-main {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card) .statement-card-main {
   justify-content: center;
   line-height: 1.3;
 }
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .proposition,
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .hyp-name,
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .hyp-colon {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-3 .proposition,
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-3 .hyp-name,
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-3 .hyp-colon {
   font-size: 1.02rem;
 }
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .statement-card-main {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-3 .statement-card-main {
   line-height: 1.18;
 }
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .statement-forall-footer {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-3 .statement-forall-footer {
   margin-top: 0.12rem;
   font-size: 0.78rem;
   line-height: 1.15;
 }
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-3 .statement-atomic-form {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-3 .statement-atomic-form {
   font-size: 0.74rem;
   line-height: 1.1;
 }
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .proposition,
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .hyp-name,
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .hyp-colon {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-4 .proposition,
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-4 .hyp-name,
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-4 .hyp-colon {
   font-size: 0.92rem;
 }
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .statement-card-main {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-4 .statement-card-main {
   line-height: 1.12;
 }
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .statement-card-main > .proposition {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-4 .statement-card-main > .proposition {
   margin-top: 0;
 }
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .statement-forall-footer {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-4 .statement-forall-footer {
   margin-top: 0.06rem;
   font-size: 0.7rem;
   line-height: 1.1;
 }
-.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held).theorem-card-lines-4 .statement-atomic-form {
+.visual-page:not(.phone-portrait) :is(.theorem-tray-panel .theorem-tray-card, .theorem-tray-held, .theorem-copy-card).theorem-card-lines-4 .statement-atomic-form {
   font-size: 0.68rem;
   line-height: 1.05;
 }
@@ -2304,10 +2311,8 @@
   border-radius: 0 10px 10px 0;
   cursor: pointer;
   writing-mode: vertical-rl;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--visual-text-secondary);
   font-family: var(--font-family), system-ui, sans-serif;
   -webkit-appearance: none;
@@ -2529,6 +2534,15 @@
 }
 .visual-page .tr-tab-btn:last-child {
   border-right: none;
+}
+/* On a PC the row of tabs that ends a lower menu is taller, with its labels where they
+   were: the operating system's own bar (a dock, a taskbar that slides up) can come over
+   the bottom edge of the window without covering them. A phone has its own allowance
+   (`--mobile-dock-bottom-space`). */
+@media (hover: hover) and (pointer: fine) {
+  .visual-page:not(.phone-portrait) .tr-dock-tabs:last-child .tr-tab-btn {
+    padding-bottom: 1.9rem;
+  }
 }
 .visual-page .tr-tab-btn:hover:not(:disabled):not(.active) {
   color: var(--visual-text-bright);
@@ -2947,6 +2961,21 @@
   transform: translateX(0);
 }
 
+/* A card being dragged is drawn in a layer of its own, above the proof panel: the page
+   it was picked up from lies under that panel, and the card would pass behind it. */
+.visual-page.visual-drag-layer {
+  z-index: 150;
+  display: block;
+  background: none;
+  pointer-events: none;
+}
+
+/* The layer lets the pointer through to the page; the card in it is under the pointer
+   as it always was, so the cursor is the card's. */
+.visual-page.visual-drag-layer > * {
+  pointer-events: auto;
+}
+
 /* Tab sticking out from right edge of sidebar, just below the top header */
 .proof-sidebar-tab {
   position: absolute;
@@ -2963,10 +2992,8 @@
   border-radius: 0 10px 10px 0;
   cursor: pointer;
   writing-mode: vertical-rl;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--visual-text-secondary);
   font-family: var(--font-family), system-ui, sans-serif;
   transition: background 0.15s, color 0.15s;
@@ -3014,10 +3041,8 @@
   padding: 0.28rem 0.65rem;
   background: var(--visual-glass-bg);
   color: var(--visual-text-muted);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   cursor: pointer;
   font-family: var(--font-family), system-ui, sans-serif;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -3538,8 +3563,6 @@
     font-family: var(--font-family), system-ui, sans-serif;
     font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
     cursor: pointer;
   }
 
@@ -3726,10 +3749,8 @@
 
   .visual-page.phone-portrait .mobile-side-page-kicker {
     color: var(--visual-text-muted);
-    font-size: 0.62rem;
+    font-size: 0.72rem;
     font-weight: 800;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     font-family: var(--font-family), system-ui, sans-serif;
   }
 
@@ -3861,7 +3882,8 @@
     gap: 0.5rem;
   }
 
-  .visual-page.phone-portrait.tr-overlay .cn-brick {
+  .visual-page.phone-portrait.tr-overlay .cn-brick,
+  .visual-page.phone-portrait.visual-drag-layer .cn-brick {
     max-width: min(9rem, calc(100vw - 7rem));
     padding: 0.5rem 0.75rem;
   }
@@ -4116,10 +4138,8 @@
 .proof-steps-table th {
   text-align: left;
   color: var(--visual-text-muted);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   padding: 0.4rem 0.75rem;
   border-bottom: 1px solid var(--visual-border-faint);
   font-family: var(--font-family), system-ui, sans-serif;
@@ -4489,8 +4509,6 @@
   font-size: 0.85rem;
   font-family: var(--font-family), system-ui, sans-serif;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 
 .visual-page .cn-propose-var {
@@ -5128,9 +5146,12 @@
 }
 
 /* ── Screens between levels (experimental) ──
-   The level stays behind, dimmed; a window shows what the level brings or what it
-   earned, and a button moves on. The whole thing fades in, and out again. */
+   The level stays behind, dimmed, under its header, which is part of the screen; a
+   window shows what the level brings or what it earned, and a button moves on. The
+   whole thing fades in, and out again. */
 .visual-page.level-interstitial-backdrop {
+  /* Below the level's header (`.visual-header`), which stays as it is. */
+  top: 3.25rem;
   z-index: 400;
   display: flex;
   align-items: center;
@@ -5142,10 +5163,15 @@
   animation: level-interstitial-in 0.26s ease-out both;
 }
 
+/* The way out is an animation too: the one it came in by would hold its last frame
+   over a plain change of opacity. `FADE_OUT_MS` in LevelInterstitial.tsx is its length. */
 .visual-page.level-interstitial-backdrop.closing {
-  opacity: 0;
-  transition: opacity 0.18s ease-in;
+  animation: level-interstitial-out 0.22s ease-in both;
   pointer-events: none;
+}
+
+.level-interstitial-backdrop.closing .level-interstitial {
+  animation: level-interstitial-sink 0.22s ease-in both;
 }
 
 @keyframes level-interstitial-in {
@@ -5153,19 +5179,33 @@
   to { opacity: 1; }
 }
 
+@keyframes level-interstitial-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 @keyframes level-interstitial-rise {
   from { opacity: 0; transform: translateY(0.75rem) scale(0.98); }
   to { opacity: 1; transform: none; }
 }
 
+@keyframes level-interstitial-sink {
+  from { transform: none; }
+  to { transform: translateY(0.5rem) scale(0.98); }
+}
+
+/* As wide as what it shows: the cards are in one row, however many there are. */
 .level-interstitial {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1.1rem;
-  width: min(46rem, 100%);
-  max-height: calc(100vh - 2rem);
-  overflow-y: auto;
+  box-sizing: border-box;
+  width: fit-content;
+  min-width: min(26rem, 100%);
+  max-width: 100%;
+  max-height: 100%;
+  overflow: auto;
   padding: 1.6rem 1.75rem 1.4rem;
   border: 1px solid var(--visual-glass-border);
   border-radius: 16px;
@@ -5184,32 +5224,140 @@
   color: var(--visual-accent);
 }
 
+/* Columns of one width, however much is said under each card: the row is centred under
+   the title, and with an odd number of cards the middle one is right under it. */
 .level-interstitial-items {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  justify-items: center;
   justify-content: center;
+  align-items: start;
   gap: 1rem 1.25rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* What is said about one card is set under it, no wider than the card needs to be
+   told apart from its neighbours; a card on its own has the window's width for it. */
 .level-interstitial-item {
   display: flex;
   flex-direction: column;
   align-items: center;
+  flex: 0 0 auto;
   gap: 0.5rem;
   max-width: 19rem;
+  text-align: center;
+}
+
+.level-interstitial-item:only-child {
+  max-width: 34rem;
+}
+
+/* A phone held upright has no room for a row: two cards side by side where they fit. */
+@media (max-width: 720px) {
+  .level-interstitial {
+    padding-inline: 1rem;
+  }
+
+  .level-interstitial-items {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+}
+
+/* A symbol the game introduces (`VisualPreLevelSymbol`): the symbol itself, large, in
+   the colour of what the player acts with, over what it is called. */
+.symbol-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  box-sizing: border-box;
+  min-width: 7.5rem;
+  min-height: 6.5rem;
+  padding: 0.8rem 1.1rem 0.75rem;
+  border: 1px solid var(--visual-info-border);
+  border-radius: 12px;
+  background: var(--visual-info-bg);
+  color: var(--visual-text-primary);
+}
+
+.symbol-card-glyph {
+  font-family: 'Cambria Math', 'Latin Modern Math', Georgia, serif;
+  font-size: 2.9rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--visual-info);
+  white-space: nowrap;
+}
+
+.symbol-card[data-size='medium'] .symbol-card-glyph {
+  font-size: 2.3rem;
+}
+
+.symbol-card[data-size='long'] .symbol-card-glyph {
+  font-size: 1.9rem;
+}
+
+.symbol-card-name {
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--visual-text-secondary);
+  white-space: nowrap;
 }
 
 /* The cards are the ones the player will find in the level, but they aren't picked up
    here: no grabbing hand, and no shadow of a card in the air. */
 .visual-page .level-interstitial .theorem-overlay-card,
 .visual-page .level-interstitial .tactic-overlay-card,
-.visual-page .compendium .theorem-overlay-card,
-.visual-page .compendium .tactic-overlay-card {
+.visual-page .collection .theorem-overlay-card,
+.visual-page .collection .tactic-overlay-card {
   cursor: inherit;
   box-shadow: none;
+}
+
+/* A rule of Rewrite Mode outside it (`EqualityRulePreviewCard`): the size and the
+   centred lines of the dock's cards (`.visual-page.tr-overlay .tr-rule-card`), at the
+   width of its rule. */
+.visual-page .tr-rule-card.tr-rule-preview-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 3.45rem;
+  padding: 0.6rem 0.9rem;
+  cursor: inherit;
+  touch-action: auto;
+}
+
+.visual-page .tr-rule-card.tr-rule-preview-card.tr-axiom-card {
+  padding: calc(0.6rem - 3px) calc(0.9rem - 3px);
+}
+
+.visual-page .tr-rule-card.tr-rule-preview-card:hover {
+  background: var(--visual-info-bg);
+}
+
+.visual-page .tr-rule-preview-card .tr-symbol {
+  white-space: nowrap;
+}
+
+/* `code` in what a screen says keeps its lettering, with no patch of colour behind it. */
+.visual-page.level-interstitial-backdrop .level-interstitial .markdown code,
+.visual-page .collection .collection-page-text .markdown code {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.94em;
 }
 
 .level-interstitial-item-text,
@@ -5225,21 +5373,19 @@
 
 .level-interstitial-item-text .markdown p,
 .level-interstitial-text .markdown p,
-.compendium-page-text .markdown p {
+.collection-page-text .markdown p {
   margin: 0.35rem 0;
 }
 
 /* A screen with nothing to hand out is an announcement: its text is the headline. */
 .level-interstitial.announcement {
-  width: min(30rem, 100%);
+  min-width: min(30rem, 100%);
   padding-block: 2rem 1.6rem;
 }
 
 .level-interstitial.announcement .level-interstitial-title {
   font-size: 1rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--visual-text-secondary);
 }
 
@@ -5250,8 +5396,7 @@
   color: var(--visual-text-primary);
 }
 
-.level-interstitial-continue,
-.compendium-page-close {
+.level-interstitial-continue {
   padding: 0.6rem 1.6rem;
   border: none;
   border-radius: 9px;
@@ -5263,20 +5408,21 @@
   cursor: pointer;
 }
 
-.level-interstitial-continue:hover,
-.compendium-page-close:hover {
+.level-interstitial-continue:hover {
   background: var(--visual-accent-strong);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .visual-page.level-interstitial-backdrop,
-  .level-interstitial {
+  .visual-page.level-interstitial-backdrop.closing,
+  .level-interstitial,
+  .level-interstitial-backdrop.closing .level-interstitial {
     animation: none;
   }
 }
 
-/* ── The Compendium (experimental) ── */
-.visual-map-compendium-btn {
+/* ── The Collection (experimental) ── */
+.visual-map-collection-btn {
   height: 2.25rem;
   margin-right: 0.5rem;
   padding: 0 0.85rem;
@@ -5292,11 +5438,11 @@
   transition: background 0.15s, border-color 0.15s;
 }
 
-.visual-map-compendium-btn:hover {
+.visual-map-collection-btn:hover {
   background: var(--visual-glass-bg-hover);
 }
 
-.compendium {
+.collection {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -5304,7 +5450,7 @@
   color: var(--visual-text-primary);
 }
 
-.compendium-header {
+.collection-header {
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -5312,7 +5458,7 @@
   flex-shrink: 0;
 }
 
-.compendium-back {
+.collection-back {
   padding: 0.4rem 0.85rem;
   border: 1px solid var(--visual-glass-border);
   border-radius: 8px;
@@ -5324,137 +5470,264 @@
   cursor: pointer;
 }
 
-.compendium-back:hover {
+.collection-back:hover {
   background: var(--visual-glass-bg-hover);
 }
 
-.compendium-title {
+.collection-title {
   margin: 0;
   font-size: 1.35rem;
   font-weight: 800;
 }
 
-.compendium-count {
+.collection-count {
   margin-left: auto;
   font-size: 0.9rem;
   color: var(--visual-text-secondary);
 }
 
-.compendium-body {
+/* Two panes: the list on the left, and on the right what is picked in it. */
+.collection-panes {
   flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  gap: 1.25rem;
+  padding: 0.25rem 1.25rem 1.25rem;
+}
+
+.collection-body {
+  flex: 0 1 34rem;
+  min-width: 18rem;
+  min-height: 0;
   overflow-y: auto;
-  padding: 0.25rem 1.25rem 2rem;
+  padding: 0 0.5rem 1rem 0;
 }
 
-.compendium-section {
-  margin-top: 1.4rem;
+.collection-detail {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  box-sizing: border-box;
+  padding: 1.5rem 1.6rem;
+  border: 1px solid var(--visual-glass-border);
+  border-radius: 14px;
+  background: var(--visual-surface-elevated);
+  text-align: center;
 }
 
-.compendium-section-title {
+/* What is picked comes up with a short fade of its own. */
+.collection-detail > * {
+  animation: level-interstitial-in 0.18s ease-out both;
+}
+
+.collection-detail-empty {
   margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.compendium-section-about {
-  margin: 0.15rem 0 0.8rem;
-  font-size: 0.9rem;
   color: var(--visual-text-secondary);
 }
 
-.compendium-grid {
+/* A list within a list: the kinds, the tabs the game files a kind's theorems under,
+   and a line for each of them. Either level folds away. */
+.collection-section {
+  margin: 1.1rem 0 0;
+}
+
+.collection-section:first-child {
+  margin-top: 0.35rem;
+}
+
+.collection-section-summary,
+.collection-tab-summary {
   display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
+  align-items: baseline;
   gap: 0.75rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.collection-section-summary::-webkit-details-marker,
+.collection-tab-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The fold's own mark: a small arrow that turns down when the list is open. */
+.collection-section-summary::before,
+.collection-tab-summary::before {
+  content: '▸';
+  flex: 0 0 0.9rem;
+  color: var(--visual-text-secondary);
+  transition: transform 0.15s;
+}
+
+.collection-section[open] > .collection-section-summary::before,
+.collection-tab[open] > .collection-tab-summary::before {
+  transform: rotate(90deg);
+}
+
+.collection-section-summary {
+  padding: 0.45rem 0.25rem;
+  border-bottom: 1px solid var(--visual-border-subtle);
+}
+
+.collection-section-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.collection-section-count,
+.collection-tab-count {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--visual-text-secondary);
+  white-space: nowrap;
+}
+
+.collection-tabs,
+.collection-entries {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.compendium-entry {
-  display: flex;
+/* Each level of the list is set in from the one above, along a rule. */
+.collection-tabs,
+.collection-section > .collection-entries {
+  margin-left: 0.65rem;
+  padding-left: 0.85rem;
+  border-left: 1px solid var(--visual-border-subtle);
 }
 
-.compendium-entry-button {
+.collection-tab-summary {
+  padding: 0.4rem 0.25rem 0.3rem;
+}
+
+.collection-tab-title {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.collection-tab > .collection-entries {
+  margin: 0 0 0.35rem 0.65rem;
+  padding-left: 0.85rem;
+  border-left: 1px solid var(--visual-border-subtle);
+}
+
+.collection-entry-line {
   display: flex;
-  padding: 0;
+  align-items: baseline;
+  gap: 1rem;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.32rem 0.6rem;
   border: none;
-  border-radius: 12px;
+  border-radius: 7px;
   background: none;
   color: inherit;
   font: inherit;
+  text-align: left;
+}
+
+button.collection-entry-line {
   cursor: pointer;
-  transition: transform 0.12s;
 }
 
-.compendium-entry-button:hover,
-.compendium-entry-button:focus-visible {
-  transform: translateY(-2px);
+button.collection-entry-line:hover,
+button.collection-entry-line:focus-visible {
+  background: var(--visual-glass-bg-hover);
 }
 
-.compendium-locked-card {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 7.5rem;
-  min-height: 3.4rem;
-  padding: 0.5rem 1rem;
-  border: 1px dashed var(--visual-border-subtle);
-  border-radius: 12px;
-  color: var(--visual-text-secondary);
+/* The line that the right pane is showing. */
+.collection-entry.selected button.collection-entry-line {
+  background: var(--visual-info-bg-strong);
+  box-shadow: inset 0 0 0 1px var(--visual-info-border);
+}
+
+.collection-entry-name {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: var(--visual-info);
+}
+
+[data-section='proposition'] .collection-entry-name {
+  color: rgb(var(--pal-theorem));
+}
+
+[data-section='tactic'] .collection-entry-name {
+  color: var(--visual-tactic-text);
+}
+
+/* A symbol's line starts with the symbol, in the lettering of the statements. */
+[data-section='symbol'] .collection-entry-name {
+  min-width: 2.6rem;
+  font-family: 'Cambria Math', 'Latin Modern Math', Georgia, serif;
+  font-size: 1.15rem;
+}
+
+[data-section='symbol'] .collection-entry-statement {
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+.collection-entry-statement {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Cambria Math', 'Latin Modern Math', Georgia, serif;
   font-size: 1.05rem;
+}
+
+.collection-entry.locked .collection-entry-line {
+  color: var(--visual-text-secondary);
   font-weight: 700;
   letter-spacing: 0.15em;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
-.compendium-page-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgba(var(--pal-backdrop), 0.6);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  animation: level-interstitial-in 0.2s ease-out both;
+/* A narrow screen has no room for two panes side by side: what is picked is shown on
+   top, in a pane that keeps its place, and the list scrolls under it. */
+@media (max-width: 720px) {
+  .collection-panes {
+    flex-direction: column-reverse;
+    gap: 0.75rem;
+    padding-inline: 0.75rem;
+  }
+
+  .collection-body {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-right: 0;
+  }
+
+  .collection-detail {
+    flex: 0 0 auto;
+    max-height: 46%;
+    justify-content: flex-start;
+    padding: 1rem;
+  }
 }
 
-.compendium-page {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.9rem;
-  width: min(32rem, 100%);
-  max-height: calc(100vh - 2rem);
-  overflow-y: auto;
-  padding: 1.5rem 1.6rem 1.3rem;
-  border: 1px solid var(--visual-glass-border);
-  border-radius: 14px;
-  background: var(--visual-surface-elevated);
-  color: var(--visual-text-primary);
-  box-shadow: 0 18px 48px var(--visual-shadow-strong);
-  text-align: center;
-}
-
-.compendium-kind {
-  font-size: 0.78rem;
+.collection-kind {
+  font-size: 0.85rem;
   font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
   color: var(--visual-accent);
 }
 
-.compendium-page-text {
+.collection-page-text {
+  max-width: 34rem;
   font-size: 1rem;
   line-height: 1.5;
 }
 
-.compendium-page-source {
+.collection-page-source {
   margin: 0;
   font-size: 0.9rem;
   color: var(--visual-text-secondary);

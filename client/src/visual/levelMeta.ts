@@ -1,10 +1,10 @@
 /**
- * What the map, and the Compendium on it, need to know about every level of a game:
+ * What the map, and the Collection on it, need to know about every level of a game:
  * fetched once from the levels' data and kept for the session.
  */
 import * as React from 'react'
 import { getDataBaseUrl } from '../utils/url'
-import type { CompendiumLevel, InterstitialScreen, InventoryTileSummary } from './compendiumData'
+import type { CollectionLevel, InterstitialScreen, InventoryTileSummary } from './collectionData'
 
 export interface LevelMeta {
   title?: string
@@ -13,8 +13,8 @@ export interface LevelMeta {
   textLevel: boolean
   boss: boolean
   introduction?: string
-  /** What the Compendium reads from the level; absent where the level didn't load. */
-  compendium?: CompendiumLevel
+  /** What the Collection reads from the level; absent where the level didn't load. */
+  collection?: CollectionLevel
 }
 
 interface LevelJson {
@@ -40,12 +40,13 @@ function metaOf(data: LevelJson | null): LevelMeta {
     textLevel: Boolean(data?.visualTextLevel),
     boss: Boolean(data?.visualBossLevel),
     introduction: data?.introduction ?? undefined,
-    compendium: data ? {
+    collection: data ? {
       label: data.visualLevelNumber ?? undefined,
       statementName: data.statementName,
       lemmas: (data.lemmas ?? []).map(tile),
       tactics: (data.tactics ?? []).map(tile),
       screens: [data.visualPreLevel, data.visualPostLevel].filter((screen): screen is InterstitialScreen => Boolean(screen)),
+      postScreen: data.visualPostLevel ?? undefined,
     } : undefined,
   }
 }

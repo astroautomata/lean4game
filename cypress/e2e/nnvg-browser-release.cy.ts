@@ -56,8 +56,22 @@ function relationShouldBe(text: string) {
   })
 }
 
+/** Bring up the tab of Rewrite Mode's lower menu that has the rule labelled `label`:
+ * the game has no tab that lists everything (`VisualNoAllTab`). */
+function showRule(label: string, tab = 0) {
+  cy.get('.tr-rule-dock[data-layout-ready="true"]', { timeout: LOAD_TIMEOUT }).should('exist')
+  cy.get('body').then($body => {
+    if ($body.find(`.tr-rule-card[data-rule-label="${label}"]`).filter(':visible').length > 0) return
+    const tabs = $body.find('.tr-transformation-overlay .tr-dock-tabs .tr-tab-btn')
+    if (tab >= tabs.length) return
+    cy.wrap(tabs[tab]!).click()
+    showRule(label, tab + 1)
+  })
+}
+
 function clickRule(label: string) {
   notProcessing()
+  showRule(label)
   cy.get(`.tr-rule-card[data-rule-label="${label}"]`, { timeout: LOAD_TIMEOUT }).filter(':visible').first().click()
 }
 

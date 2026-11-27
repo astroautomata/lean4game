@@ -1050,8 +1050,8 @@ test('a bonus row can be sent to either side; across the columns its levels sit 
   const slot = n => boss.x - (n - 0.5) * PATH_MAP_COLUMN_WIDTH / 2
   const offColumns = x =>
     assert.equal(Math.abs(x - Math.round(x / PATH_MAP_COLUMN_WIDTH) * PATH_MAP_COLUMN_WIDTH), PATH_MAP_COLUMN_WIDTH / 4)
-  // The one level off the last level about powers goes right, at a bonus level's usual
-  // distance: it doesn't reach the next column.
+  // The one level off the last level about powers goes right, and doesn't reach the
+  // next column.
   const [last, fermat] = [node(layout, 'Power', 9), node(layout, 'PowerBonus', 1)]
   assert.ok(fermat.x > last.x && fermat.x < last.x + PATH_MAP_COLUMN_WIDTH)
   // With nothing waiting for them (here the level about Fermat waits for ≤ World's boss
@@ -1066,15 +1066,20 @@ test('a bonus row can be sent to either side; across the columns its levels sit 
   const plain = [1, 2, 3, 4].map(n => node(fromBoss, 'LessOrEqualBonus', n).x)
   assert.deepEqual(plain, [1, 2, 3, 4].map(slot))
   plain.forEach(offColumns)
+  // There the level about Fermat is at a bonus level's usual distance.
+  const usual = node(fromBoss, 'PowerBonus', 1).x
+  assert.equal(usual, last.x + 0.6 * PATH_MAP_COLUMN_WIDTH)
   // The level about Fermat waits for those bonus levels and lies lower, less than a
-  // column past the end of their row. So the last of them is right above it and the
-  // path between the two drops straight down; the levels before it are a slot further
-  // along than they would be, still off the columns, and the row bridges the path that
-  // comes down the column it crosses on the way to its last level.
+  // column past the end of their row. So the row is a slot further along than it would
+  // be, which brings its last level nearest to above that level, and the level, the
+  // only one of its row, comes under it: the path between the two drops straight down,
+  // and the row's levels are evenly spaced, each of them off the columns. The row
+  // bridges the path that comes down the column it crosses on the way to its last level.
   const xs = [1, 2, 3, 4].map(n => node(layout, 'LessOrEqualBonus', n).x)
-  assert.deepEqual(xs, [slot(2), slot(3), slot(4), fermat.x])
-  xs.slice(0, 3).forEach(offColumns)
-  assert.ok(xs[2] - xs[3] >= PATH_MAP_COLUMN_WIDTH / 2)
+  assert.deepEqual(xs, [slot(2), slot(3), slot(4), slot(5)])
+  xs.forEach(offColumns)
+  assert.equal(fermat.x, slot(5))
+  assert.ok(Math.abs(fermat.x - usual) < PATH_MAP_COLUMN_WIDTH / 4)
   for (const n of [1, 2, 3, 4]) assert.equal(node(layout, 'LessOrEqualBonus', n).y, boss.y + PATH_MAP_ROW_HEIGHT)
   const lastBonus = node(layout, 'LessOrEqualBonus', 4)
   assert.ok(fermat.y > lastBonus.y)
@@ -1095,16 +1100,17 @@ test('a bonus row can be sent to either side; across the columns its levels sit 
   assertNoPathOverLevels(shortRow)
   assert.deepEqual([1, 2, 3].map(n => node(shortRow, 'LessOrEqualBonus', n).x), [1, 2, 3].map(slot))
   const shortLast = node(shortRow, 'LessOrEqualBonus', 3)
+  assert.equal(node(shortRow, 'PowerBonus', 1).x, usual)
   assert.deepEqual(segment(shortRow, 'edge:LessOrEqualBonus:PowerBonus:out').points[0], { x: shortLast.x, y: shortLast.y })
   assert.deepEqual(segment(shortRow, 'edge:LessOrEqualBonus:PowerBonus:in').points.slice(1), [
-    { x: fermat.x, y: shortLast.y }, { x: fermat.x, y: fermat.y },
+    { x: usual, y: shortLast.y }, { x: usual, y: fermat.y },
   ])
   assert.deepEqual(shortRow.segments.filter(s => s.bridge).map(s => s.key),
     [`edge:LessOrEqualBonus:PowerBonus:in:bridge:${-PATH_MAP_COLUMN_WIDTH}`])
   // From a main world such a path turns away below that world's own bonus row.
   const crossY = boss.y + 1.5 * PATH_MAP_ROW_HEIGHT
   assert.deepEqual(segment(fromBoss, 'edge:LessOrEqualBoss:PowerBonus:in').points.slice(1), [
-    { x: boss.x, y: crossY }, { x: fermat.x, y: crossY }, { x: fermat.x, y: fermat.y },
+    { x: boss.x, y: crossY }, { x: usual, y: crossY }, { x: usual, y: fermat.y },
   ])
   // A bonus row sent outwards is where it always was.
   const [anchor, rewriteBonus] = [node(layout, 'Rewrite', 3), node(layout, 'RewriteBonus', 1)]

@@ -164,9 +164,32 @@ function notProcessing() {
   })
 }
 
+/** Bring up the tab of Rewrite Mode's lower menu that has the rule labelled `label`:
+ * the game has no tab that lists everything (`VisualNoAllTab`), so a rule is on the
+ * Hypotheses tab or on the tab its theorem is filed under. */
+function showRule(label: string, tab = 0) {
+  cy.get('.tr-rule-dock[data-layout-ready="true"]', { timeout: LOAD_TIMEOUT }).should('exist')
+  cy.get('body').then($body => {
+    if ($body.find(`.tr-rule-card[data-rule-label="${label}"]`).filter(':visible').length > 0) return
+    const tabs = $body.find('.tr-transformation-overlay .tr-dock-tabs .tr-tab-btn')
+    if (tab >= tabs.length) return
+    cy.wrap(tabs[tab]!).click()
+    showRule(label, tab + 1)
+  })
+}
+
 function clickRule(label: string) {
   notProcessing()
+  showRule(label)
   cy.get(`.tr-rule-card[data-rule-label="${label}"]`, { timeout: LOAD_TIMEOUT }).filter(':visible').first().click()
+}
+
+/** Click a brick of the specialization view, on the tab it is on: variables, numbers
+ * (and `False`), or functions and connectives. */
+function clickBrick(id: string) {
+  const tab = id.startsWith('var_') ? 'variables' : id.startsWith('fn_') ? 'functions' : 'numbers'
+  cy.get(`.tr-construction-overlay .tr-tab-btn[data-tab="${tab}"]`, { timeout: LOAD_TIMEOUT }).click()
+  cy.get(`[data-brick-id="${id}"]`).click()
 }
 
 function check() {
@@ -271,30 +294,33 @@ function openCanvasLevel(world: string, n: number) {
   cy.get('[data-testid="goal-card"]', { timeout: LOAD_TIMEOUT }).should('be.visible')
 }
 
-/** Whether the theorem tray has the card labelled `label`. The tray renders one
- * page of cards at a time, so this pages through it from the first page. */
+/** Whether the theorem tray has the card labelled `label`. The tray renders one page
+ * of one tab at a time, and the game has no tab for everything (`VisualNoAllTab`), so
+ * this goes through the tabs, and through each from its first page. It stops on the page
+ * that has the card. */
 function trayShouldHaveCard(label: string, expected: boolean) {
   const card = `[data-testid="theorem-tray-card"][data-theorem-label="${label}"]`
   const indicator = '.theorem-tray-panel .tr-page-indicator'
+  const tabs = '[data-testid="theorem-category-tabs"] .tr-tab-btn'
   // Turn the page, and wait until the tray shows the new one.
   const turn = ($button: JQuery<HTMLElement>, $tray: JQuery<HTMLElement>) => {
     const before = $tray.find('.tr-page-indicator').text()
     cy.wrap($button.first()).click()
     cy.get(indicator).should('not.have.text', before)
   }
-  const look = (remainingPages: number): void => {
+  const look = (remainingPages: number, done: (found: boolean) => void): void => {
     cy.get('.theorem-tray-panel', { timeout: LOAD_TIMEOUT }).then($tray => {
       if ($tray.find(card).length > 0) {
-        expect(expected, `theorem card ${label}`).to.equal(true)
+        done(true)
         return
       }
       const $next = $tray.find('.tr-nav-btn[aria-label="Next"]')
       if ($next.length === 0 || $next.is(':disabled') || remainingPages <= 0) {
-        expect(expected, `theorem card ${label}`).to.equal(false)
+        done(false)
         return
       }
       turn($next, $tray)
-      look(remainingPages - 1)
+      look(remainingPages - 1, done)
     })
   }
   const rewind = (remainingPages: number): void => {
@@ -305,8 +331,19 @@ function trayShouldHaveCard(label: string, expected: boolean) {
       rewind(remainingPages - 1)
     })
   }
-  rewind(40)
-  look(40)
+  const lookInTab = (tab: number): void => {
+    cy.get('.theorem-tray-panel', { timeout: LOAD_TIMEOUT }).then($tray => {
+      const $tabs = $tray.find(tabs)
+      if ($tabs.length > 0) cy.wrap($tabs[tab]!).click()
+      rewind(40)
+      look(40, found => {
+        if (found) expect(expected, `theorem card ${label}`).to.equal(true)
+        else if (tab + 1 < $tabs.length) lookInTab(tab + 1)
+        else expect(expected, `theorem card ${label}`).to.equal(false)
+      })
+    })
+  }
+  lookInTab(0)
 }
 
 function headerShouldNameLevel(number: string, title: string) {
@@ -412,12 +449,14 @@ describe('Natural Numbers Video Game', () => {
     mapLevel('SuccessorJoined', 3).should('have.attr', 'data-boss', 'true')
     mapLevel('PropositionRight', 8).should('have.attr', 'data-boss', 'true')
     mapLevel('NeqJoined', 1).should('have.attr', 'data-boss', 'true')
-    // Multiplication and Exponentiation World: a miniboss at its level 7, where the
+    // Multiplication and Exponentiation World: a miniboss at its level 6, before the
     // levels about powers begin, and its boss at the end.
-    mapLevel('Multiplication', 8).should('have.attr', 'data-boss', 'true')
-    mapLevel('Multiplication', 9).should('not.exist')
+    mapLevel('Multiplication', 7).should('have.attr', 'data-boss', 'true')
+    mapLevel('Multiplication', 8).should('not.exist')
     mapLevel('Power', 9).should('have.attr', 'data-boss', 'true')
     mapLevel('PowerBonus', 1).should('have.attr', 'data-boss', 'true')
+    mapLevel('PowerBonusA', 2).should('not.have.attr', 'data-boss')
+    mapLevel('PowerBonusA', 3).should('not.exist')
     // Induction World has a miniboss past the ≠ World, and its boss at the end.
     mapLevel('InductionJoined', 2).should('not.have.attr', 'data-boss')
     mapLevel('InductionJoined', 4).should('have.attr', 'data-boss', 'true')
@@ -468,6 +507,8 @@ describe('Natural Numbers Video Game', () => {
       'edge:Power:Outro:in',
       'edge:AdvMultiplication:Outro:in',
       'bonus:Power:9:PowerBonus',
+      // The level before it has two bonus levels of its own.
+      'bonus:Power:8:PowerBonusA',
       // ≤ World's boss has a row of bonus levels.
       'bonus:LessOrEqualBoss:1:LessOrEqualBonus',
       // Two bonuses leave Rewrite World's level 2, neither needing the other.
@@ -488,10 +529,15 @@ describe('Natural Numbers Video Game', () => {
     // Multiplication and Exponentiation World's path to Advanced Multiplication World
     // runs down Induction World's column, below that world's last level. The row of
     // ≤ World's bonus levels crosses it, with a bridge, on the way to its last level,
-    // which is right above the bonus boss about Fermat.
-    cy.get('[data-testid="path-map-bridge"]').should('have.length', 1)
+    // which is right above the bonus boss about Fermat. Higher up, Induction World's
+    // path to ≤ World's level 7 crosses it too.
+    cy.get('[data-testid="path-map-bridge"]').should('have.length', 2)
     cy.get('[data-segment="edge:LessOrEqualBonus:PowerBonus:in"]').should('exist')
     cy.get('[data-segment="edge:LessOrEqualBoss:PowerBonus:in"]').should('not.exist')
+    // The bonus levels off level 14 wait for all of the ≠ World too, and ask for no path
+    // from there (`VisualNoPathFrom`): it would cross the whole map.
+    cy.get('[data-segment="edge:Neq:PowerBonusA:in"]').should('not.exist')
+    cy.get('[data-segment="edge:NeqJoined:PowerBonusA:in"]').should('not.exist')
     // Successor World has no bonus levels.
     cy.get('[data-segment^="bonus:Successor"]').should('not.exist')
     // Numbering restarts per stream, and bonuses are numbered as in the spec.
@@ -563,18 +609,21 @@ describe('Natural Numbers Video Game', () => {
     mapLevel('InductionJoined', 1).should('contain.text', '4')
     mapLevel('InductionDouble', 2).should('contain.text', '9')
     mapLevel('Multiplication', 1).should('contain.text', '0')
-    mapLevel('Multiplication', 8).should('contain.text', '7')
-    mapLevel('Power', 1).should('contain.text', '8')
-    mapLevel('Power', 9).should('contain.text', '16')
+    mapLevel('Multiplication', 7).should('contain.text', '6')
+    mapLevel('Power', 1).should('contain.text', '7')
+    mapLevel('Power', 9).should('contain.text', '15')
     mapLevel('LessOrEqual', 1).should('contain.text', '0')
-    mapLevel('LessOrEqualJoined', 1).should('contain.text', '6')
+    mapLevel('LessOrEqual', 7).should('contain.text', '6')
+    mapLevel('LessOrEqualJoined', 1).should('contain.text', '7')
     mapLevel('AdvMultiplication', 1).should('contain.text', '0')
     mapLevel('AdvMultiplication', 10).should('contain.text', '9')
-    mapLevel('LessOrEqualBoss', 1).should('contain.text', '10')
+    mapLevel('LessOrEqualBoss', 1).should('contain.text', '11')
     mapLevel('Logic', 1).should('contain.text', 'A0')
-    mapLevel('PowerBonus', 1).should('contain.text', 'A0')
+    mapLevel('PowerBonusA', 1).should('contain.text', 'A0')
+    mapLevel('PowerBonusA', 2).should('contain.text', 'A1')
+    mapLevel('PowerBonus', 1).should('contain.text', 'B0')
     mapLevel('LessOrEqualBonus', 1).should('contain.text', 'A0')
-    mapLevel('LessOrEqualBonus', 4).should('contain.text', 'A3')
+    mapLevel('LessOrEqualBonus', 5).should('contain.text', 'A4')
     mapLevel('Outro', 1).should('have.attr', 'data-text-level', 'true')
     // The barrier: nothing leads past Successor World's boss yet.
     mapLevel('SuccessorJoined', 1).should('have.attr', 'data-state', 'locked')
@@ -588,13 +637,13 @@ describe('Natural Numbers Video Game', () => {
         .getBoundingClientRect()
       return { x: box.left + box.width / 2, y: box.top + box.height / 2 }
     }
-    cy.get('[data-testid="path-map-level"]').should('have.length', 102).then($levels => {
+    cy.get('[data-testid="path-map-level"]').should('have.length', 105).then($levels => {
       // ≤ World carries on below the ≠ World's boss on the right, in three stretches,
       // and Advanced Multiplication World below it.
       expect(centre('LessOrEqual', 1).x).to.be.closeTo(centre('NeqJoined', 1).x, 1)
       expect(centre('LessOrEqual', 1).y).to.be.greaterThan(centre('NeqJoined', 1).y)
-      expect(centre('LessOrEqualJoined', 1).x).to.be.closeTo(centre('LessOrEqual', 6).x, 1)
-      expect(centre('LessOrEqualBoss', 1).x).to.be.closeTo(centre('LessOrEqual', 6).x, 1)
+      expect(centre('LessOrEqualJoined', 1).x).to.be.closeTo(centre('LessOrEqual', 7).x, 1)
+      expect(centre('LessOrEqualBoss', 1).x).to.be.closeTo(centre('LessOrEqual', 7).x, 1)
       expect(centre('AdvMultiplication', 1).x).to.be.closeTo(centre('LessOrEqualBoss', 1).x, 1)
       expect(centre('AdvMultiplication', 1).y).to.be.greaterThan(centre('LessOrEqualBoss', 1).y)
       // Induction World carries on down its own column, below the ≠ World's boss, and
@@ -616,17 +665,26 @@ describe('Natural Numbers Video Game', () => {
       // ≤ World's bonus levels go left from below its boss, towards the middle, and
       // the bonus about Fermat goes right from below the last level about powers: it is
       // right under the last of them, so the path between the two drops straight down.
-      expect(centre('PowerBonus', 1).x).to.be.closeTo(centre('LessOrEqualBonus', 4).x, 1)
-      expect(centre('PowerBonus', 1).y).to.be.greaterThan(centre('LessOrEqualBonus', 4).y + 20)
+      expect(centre('PowerBonus', 1).x).to.be.closeTo(centre('LessOrEqualBonus', 5).x, 1)
+      expect(centre('PowerBonus', 1).y).to.be.greaterThan(centre('LessOrEqualBonus', 5).y + 20)
       const drop = Cypress.$('[data-segment="edge:LessOrEqualBonus:PowerBonus:in"]')[0]!.getBoundingClientRect()
       expect(drop.width).to.be.lessThan(drop.height / 4)
       expect(drop.left + drop.width / 2).to.be.closeTo(centre('PowerBonus', 1).x, 2)
       expect(centre('LessOrEqualBonus', 1).x).to.be.lessThan(centre('LessOrEqualBoss', 1).x - 20)
-      expect(centre('LessOrEqualBonus', 4).x).to.be.lessThan(centre('LessOrEqualBonus', 1).x - 100)
-      expect(centre('LessOrEqualBonus', 4).y).to.be.closeTo(centre('LessOrEqualBonus', 1).y, 1)
+      expect(centre('LessOrEqualBonus', 5).x).to.be.lessThan(centre('LessOrEqualBonus', 1).x - 100)
+      expect(centre('LessOrEqualBonus', 5).y).to.be.closeTo(centre('LessOrEqualBonus', 1).y, 1)
+      // The five of them are evenly spaced: the last isn't pulled away from the others.
+      const steps = [1, 2, 3, 4].map(index => centre('LessOrEqualBonus', index).x - centre('LessOrEqualBonus', index + 1).x)
+      expect(steps[1], 'A1 to A2 as A0 to A1').to.be.closeTo(steps[0]!, 1)
+      expect(steps[2], 'A2 to A3 as A0 to A1').to.be.closeTo(steps[0]!, 1)
+      expect(steps[3], 'A3 to A4 as A0 to A1').to.be.closeTo(steps[0]!, 1)
       expect(centre('PowerBonus', 1).x).to.be.greaterThan(centre('Power', 9).x + 20)
+      // The two bonus levels off level 14 go the other way, out to the left.
+      expect(centre('PowerBonusA', 1).x).to.be.lessThan(centre('Power', 8).x - 20)
+      expect(centre('PowerBonusA', 2).x).to.be.lessThan(centre('PowerBonusA', 1).x - 20)
+      expect(centre('PowerBonusA', 2).y).to.be.closeTo(centre('PowerBonusA', 1).y, 1)
       // The levels about powers carry on below those about multiplication, on the far left.
-      expect(centre('Power', 1).x).to.be.closeTo(centre('Multiplication', 8).x, 1)
+      expect(centre('Power', 1).x).to.be.closeTo(centre('Multiplication', 7).x, 1)
       expect(centre('Multiplication', 1).x).to.be.lessThan(centre('Induction', 1).x - 50)
       // The End is in the middle, below everything.
       const end = centre('Outro', 1)
@@ -717,13 +775,14 @@ describe('Natural Numbers Video Game', () => {
       ['Successor', 3, 'Counting to Four (Miniboss)'],
       ['InductionJoined', 2, 'add_right_eq_self'],
       ['InductionJoined', 4, 'add_right_eq_zero (Miniboss)'],
-      ['Multiplication', 8, 'mul_assoc (Miniboss)'],
+      ['Multiplication', 7, 'mul_assoc (Miniboss)'],
       ['AdvMultiplication', 5, 'le_mul_right'],
       ['LessOrEqualJoined', 1, 'Nothing Smaller than Zero'],
       ['LessOrEqualJoined', 2, '≤ Add Right Cancel'],
       ['LessOrEqualJoined', 3, 'Antisymmetry of ≤'],
       ['LessOrEqual', 6, 'Transitivity of ≤'],
-      ['LessOrEqualBonus', 4, 'Trichotomy'],
+      ['LessOrEqual', 7, 'Eliminating Addition is Decreasing'],
+      ['LessOrEqualBonus', 5, 'Trichotomy'],
       ['Logic', 1, 'Double Elimination is Equivalent To LEM'],
       ['Outro', 1, 'The End'],
     ] as const) {
@@ -734,6 +793,9 @@ describe('Natural Numbers Video Game', () => {
     // as well as having a path from there.
     tooltipOf('PowerBonus', 1).should('have.text', "🔒 Refute Fermat's Last Theorem? (needs ≤ World Bonus)")
     leave('PowerBonus', 1)
+    // Or having none, where the bonus world asked for none.
+    tooltipOf('PowerBonusA', 1).should('have.text', '🔒 Exponentiation is Not Commutative (needs ≠ World)')
+    leave('PowerBonusA', 1)
     tooltipOf('RewriteBonus', 1).should('have.text', '🔒 Fast Rewriting')
     leave('RewriteBonus', 1)
     // No level's title has a pepper.
@@ -754,17 +816,17 @@ describe('Natural Numbers Video Game', () => {
     mapLevel('Outro', 1).should('have.attr', 'data-state', 'locked')
     const done = {
       Intro: 1, Rewrite: 6, Proposition: 8, PropositionRight: 8, Successor: 3, SuccessorJoined: 3, Induction: 4,
-      Neq: 9, NeqJoined: 1, InductionJoined: 4, InductionDouble: 2, Multiplication: 8, Power: 9,
-      LessOrEqual: 6, LessOrEqualJoined: 4, LessOrEqualBoss: 1, AdvMultiplication: 10,
+      Neq: 9, NeqJoined: 1, InductionJoined: 4, InductionDouble: 2, Multiplication: 7, Power: 9,
+      LessOrEqual: 7, LessOrEqualJoined: 4, LessOrEqualBoss: 1, AdvMultiplication: 10,
     }
     // The bonus boss off the last level about powers waits for ≤ World's bonus levels
     // as well.
-    visitWithProgress({ ...done, LessOrEqualBonus: 3 })
+    visitWithProgress({ ...done, LessOrEqualBonus: 4 })
     mapLevel('Power', 9).should('have.attr', 'data-state', 'completed')
     mapLevel('PowerBonus', 1).should('have.attr', 'data-state', 'locked')
     cy.get('[data-segment="bonus:Power:9:PowerBonus"]').should('have.attr', 'data-lit', 'true')
     cy.get('[data-segment="edge:LessOrEqualBonus:PowerBonus:in"]').should('have.attr', 'data-lit', 'false')
-    visitWithProgress({ ...done, LessOrEqualBonus: 4 })
+    visitWithProgress({ ...done, LessOrEqualBonus: 5 })
     mapLevel('PowerBonus', 1).should('have.attr', 'data-state', 'frontier')
     cy.get('[data-segment="edge:LessOrEqualBonus:PowerBonus:in"]').should('have.attr', 'data-lit', 'true')
     visitWithProgress(done)
@@ -1908,20 +1970,65 @@ describe('Natural Numbers Video Game', () => {
   it('shows a screen before a level, and one after it on the way to the next', () => {
     const screen = '[data-testid="level-interstitial"]'
     const nextButton = () => cy.get('.visual-header-next-btn').filter(':visible').first()
-    // Successor World's first level opens with the axioms it brings.
+    // Successor World's first level opens with the symbols it brings, each as a card
+    // with its name, and what is said about it underneath.
     visitWithProgress({ Intro: 1, Rewrite: 6 }, level('Successor', 1))
     cy.get(screen, { timeout: LOAD_TIMEOUT }).should('have.attr', 'data-kind', 'pre')
-    cy.get(screen).find('.level-interstitial-title').should('have.text', 'Axioms Unlocked!')
+    // It waits for the level: the loading screen is gone when it comes up.
+    cy.get(screen).then(() => {
+      expect(Cypress.$('.tr-transformation-overlay .tr-expr-wrapper').length, 'the level behind it').to.equal(1)
+    })
+    cy.get(screen).should('have.attr', 'data-page', '1').and('have.attr', 'data-pages', '2')
+    cy.get(screen).find('.level-interstitial-title').should('have.text', 'Symbols Unlocked!')
+    cy.get(screen).find('[data-testid="symbol-card"]').should($cards => {
+      expect([...$cards].map(card => card.getAttribute('data-symbol'))).to.deep.equal(['0', 'S(n)', '+'])
+      const tops = [...$cards].map(card => Math.round(card.getBoundingClientRect().top))
+      expect(new Set(tops).size, 'one row').to.equal(1)
+    })
+    cy.get(screen).find('[data-unlock="S(n)"]').should('contain.text', 'The Successor Function')
+      .and('contain.text', 'Zero to one, one to two, and onwards forever.')
+    cy.get(screen).find('[data-unlock="0"]').should('contain.text', 'here, zero is a natural number')
+    // The button leads to the screen's next page: the axioms.
+    cy.contains(`${screen} button`, 'Start').should('not.exist')
+    cy.contains(`${screen} button`, 'Next').click()
+    cy.get(screen).should('have.attr', 'data-page', '2')
+    cy.get(screen).find('[data-testid="symbol-card"]').should('not.exist')
+    cy.get(screen).find('.level-interstitial-title').should('have.text', 'Axiom Equalities Unlocked!')
     cy.get(screen).find('.level-interstitial-item').should('have.length', 4)
-    cy.get(screen).find('[data-unlock="one_eq_succ_zero"]').should('contain.text', '1 = S(0)')
+    // The axioms are the cards of Rewrite Mode, double outline and all, in one row.
+    cy.get(screen).find('[data-unlock="one_eq_succ_zero"] .tr-rule-card.tr-axiom-card')
+      .should('contain.text', 'one_eq_succ_zero').and('contain.text', '1 ⇒ S(0)')
+      .and('have.css', 'border-top-style', 'double')
+    cy.get(screen).find('.level-interstitial-item').should($items => {
+      const tops = [...$items].map(item => Math.round(item.getBoundingClientRect().top))
+      expect(new Set(tops).size, 'one row').to.equal(1)
+      const window = $items.closest('.level-interstitial')[0]!.getBoundingClientRect()
+      for (const item of $items) {
+        expect(item.getBoundingClientRect().left, 'inside the window').to.be.at.least(window.left)
+        expect(item.getBoundingClientRect().right, 'inside the window').to.be.at.most(window.right)
+      }
+    })
     cy.get(screen).should('contain.text', 'building up facts about the natural numbers from scratch')
     // The level is there behind it, dimmed, and the screen fades in.
     cy.get(screen).should($screen => {
       expect(getComputedStyle($screen[0]!).animationName).to.equal('level-interstitial-in')
       expect(getComputedStyle($screen[0]!).backgroundColor).to.match(/^rgba\(.*, 0\.72\)$/u)
     })
-    cy.get('.visual-header').should('exist')
-    cy.contains(`${screen} button`, 'Start').click()
+    // The header is part of the screen: the dimming starts under it.
+    cy.get(screen).should($screen => {
+      const header = [...Cypress.$('.visual-header')].find(element => element.getBoundingClientRect().height > 0)!
+      expect($screen[0]!.getBoundingClientRect().top, 'under the header').to.be.closeTo(header.getBoundingClientRect().bottom, 1)
+    })
+    // It fades out as it faded in, and then it is gone.
+    cy.contains(`${screen} button`, 'Start').then($start => {
+      $start[0]!.click()
+      // React draws the click's change in a microtask, and so before this one.
+      return Promise.resolve().then(() => {
+        const closing = Cypress.$(screen)[0]!
+        expect(closing.className).to.contain('closing')
+        expect(getComputedStyle(closing).animationName).to.equal('level-interstitial-out')
+      })
+    })
     cy.get(screen).should('not.exist')
     expectRewriteOnlyLevel()
     // This level has no screen after it, so its button is the usual one.
@@ -1929,8 +2036,8 @@ describe('Natural Numbers Video Game', () => {
 
     // The next level brings two more axioms, with a word about each.
     visitWithProgress({ Intro: 1, Rewrite: 6, Successor: 1 }, level('Successor', 2))
-    cy.get(screen, { timeout: LOAD_TIMEOUT }).find('.level-interstitial-title').should('have.text', 'Axioms Unlocked!')
-    cy.get(screen).find('[data-unlock="add_zero"]').should('contain.text', 'n + 0 = n')
+    cy.get(screen, { timeout: LOAD_TIMEOUT }).find('.level-interstitial-title').should('have.text', 'Axiom Equalities Unlocked!')
+    cy.get(screen).find('[data-unlock="add_zero"]').should('contain.text', 'n + 0 ⇒ n')
       .and('contain.text', 'Eliminate added zeroes, but only on the right.')
     cy.get(screen).find('[data-unlock="add_succ"]').should('contain.text', 'Move successor functions out to the right addend.')
     cy.contains(`${screen} button`, 'Start').click()
@@ -1945,9 +2052,11 @@ describe('Natural Numbers Video Game', () => {
     nextButton().should('not.be.disabled').click()
     // The theorem the level proved, and then the next level with its own screen.
     cy.get(screen).should('have.attr', 'data-kind', 'post')
-    cy.get(screen).find('.level-interstitial-title').should('have.text', 'Theorem Unlocked!')
-    cy.get(screen).find('[data-unlock="add_one"]').should('contain.text', 'a + 1 = S(a)')
+    cy.get(screen).find('.level-interstitial-title').should('have.text', 'Equality Unlocked!')
+    cy.get(screen).find('[data-unlock="add_one"]').should('contain.text', 'a + 1 ⇒ S(a)')
       .and('contain.text', 'Quickly collapse added ones.')
+    // A theorem the player proved has the plain outline.
+    cy.get(screen).find('[data-unlock="add_one"] .tr-rule-card').should('not.have.class', 'tr-axiom-card')
     cy.get(screen).should('contain.text', 'available to you as theorems')
     cy.location('pathname').should('contain', '/world/Successor/level/2/')
     cy.contains(`${screen} button`, 'Continue').click()
@@ -1973,37 +2082,151 @@ describe('Natural Numbers Video Game', () => {
     cy.get('.visual-header-next-btn').filter(':visible').first().should('contain.text', 'Finish')
   })
 
-  it('keeps the Compendium off the map until something is unlocked, then lists it all', () => {
-    const button = '[data-testid="compendium-button"]'
-    const entry = (label: string) => `[data-testid="compendium-entry"][data-entry="${label}"]`
+  it('shows a proposition as its card of the lower menu, and code with no patch behind it', () => {
+    const screen = '[data-testid="level-interstitial"]'
+    const upToNeq = { Intro: 1, Rewrite: 6, Proposition: 8, PropositionRight: 8, Successor: 3, SuccessorJoined: 3 }
+    const upToInductionJoined = { ...upToNeq, Induction: 4, Neq: 9, NeqJoined: 1 }
+    // The ≠ World's level 4 brings an axiom of Proposition Mode, with a word about it.
+    visitWithProgress({ ...upToNeq, Neq: 4 }, level('Neq', 5))
+    cy.get(screen, { timeout: LOAD_TIMEOUT }).find('.level-interstitial-title').should('have.text', 'Axiom Proposition Unlocked!')
+    cy.get(screen).find('[data-unlock="succ_inj"] .statement-card.theorem-tray-held')
+      .should('contain.text', 'succ_inj').and('contain.text', 'S(a) = S(b) → a = b')
+    cy.get(screen).find('[data-unlock="succ_inj"]').should('contain.text', 'never maps two different inputs to the same output')
+    // A card on its own: what is said about it has more room than under a card in a row.
+    cy.get(screen).find('[data-unlock="succ_inj"] .level-interstitial-item-text').should($text => {
+      expect($text[0]!.getBoundingClientRect().width, 'room for the text').to.be.greaterThan(19 * 16)
+    })
+    cy.contains(`${screen} button`, 'Start').click()
+    cy.get(screen).should('not.exist')
+
+    // The cases tactic comes with the text that was its level's hint. Code in it is
+    // set as code, with no background of its own.
+    visitWithProgress({ ...upToInductionJoined, InductionJoined: 2 }, level('InductionJoined', 3))
+    cy.get(screen, { timeout: LOAD_TIMEOUT }).find('.level-interstitial-title').should('have.text', 'Tactic Unlocked!')
+    cy.get(screen).find('[data-unlock="cases"] .tactic-tray-card').should('contain.text', 'cases')
+    cy.get(screen).find('[data-unlock="cases"]').should('contain.text', 'does not give you an inductive hypothesis')
+    cy.get(screen).find('[data-unlock="cases"] code').first().should($code => {
+      const style = getComputedStyle($code[0]!)
+      expect(style.backgroundColor, 'no patch behind it').to.equal('rgba(0, 0, 0, 0)')
+      expect(style.fontFamily, 'set as code').to.contain('monospace')
+      expect(style.paddingLeft).to.equal('0px')
+    })
+    cy.contains(`${screen} button`, 'Start').click()
+    cy.get(screen).should('not.exist')
+    // The level itself no longer says it.
+    cy.get('[data-testid="goal-card"]', { timeout: LOAD_TIMEOUT }).should('be.visible')
+    cy.contains('weaker cousin').should('not.exist')
+
+    // Two propositions after a level, in one row, with one text under both.
+    visitWithProgress({ ...upToInductionJoined, InductionJoined: 1 }, level('InductionJoined', 1))
+    cy.get('.visual-header-next-btn[data-finish="true"]', { timeout: LOAD_TIMEOUT }).filter(':visible').first().click()
+    cy.get(`${screen}[data-kind="post"]`).find('.level-interstitial-title').should('have.text', 'Propositions Unlocked!')
+    cy.get(screen).find('.level-interstitial-item').should($items => {
+      expect([...$items].map(item => item.getAttribute('data-unlock'))).to.deep.equal(['add_right_cancel', 'add_left_cancel'])
+      expect(Math.round($items[0]!.getBoundingClientRect().top), 'one row').to.equal(Math.round($items[1]!.getBoundingClientRect().top))
+    })
+    cy.get(screen).find('.level-interstitial-text').should('have.text', 'Cancel two added terms from either side of an equality.')
+  })
+
+  it('announces every boss level, by its title', () => {
+    const screen = '[data-testid="level-interstitial"]'
+    const announced = (kind: string, name: string) => {
+      cy.get(`${screen}[data-kind="pre"]`, { timeout: LOAD_TIMEOUT }).find('.level-interstitial').should('have.class', 'announcement')
+      cy.get(screen).find('.level-interstitial-title').should('have.text', kind)
+      cy.get(screen).find('.level-interstitial-text').should('have.text', name)
+    }
+    // A world's boss says so in its title.
+    visitWithProgress({ Intro: 1, Rewrite: 5 }, level('Rewrite', 6))
+    announced('Rewriting World Boss', 'On The Count of Three')
+    // A miniboss is its world's.
+    visitWithProgress({
+      Intro: 1, Rewrite: 6, Proposition: 8, PropositionRight: 8, Successor: 3, SuccessorJoined: 3,
+      Induction: 4, Neq: 9, NeqJoined: 1, InductionJoined: 3,
+    }, level('InductionJoined', 4))
+    announced('Induction World Miniboss', 'add_right_eq_zero')
+    // Its name is set as code, with no patch behind it.
+    cy.get(screen).find('.level-interstitial-text code').should('have.css', 'background-color', 'rgba(0, 0, 0, 0)')
+  })
+
+  it('keeps the Collection off the map until something is unlocked, then lists it all in two panes', () => {
+    const button = '[data-testid="collection-button"]'
+    const entry = (label: string) => `[data-testid="collection-entry"][data-entry="${label}"]`
+    const detail = '[data-testid="collection-page"]'
     // A new player has nothing to look up.
     visit(MAP, { fresh: true })
     mapLevel('Outro', 1).should('exist')
     cy.get(button).should('not.exist')
-    // With Successor World open, its first axioms are the player's.
+    // With Successor World open, its first axioms and its symbols are the player's, and
+    // so is the `∀` that Rewrite World's level 3 brought.
     visitWithProgress({ Intro: 1, Rewrite: 6 })
     mapLevel('Outro', 1).should('exist')
-    cy.get(button, { timeout: LOAD_TIMEOUT }).should('have.text', 'Compendium').click()
-    cy.get('[data-testid="compendium"]').should('be.visible')
+    cy.get(button, { timeout: LOAD_TIMEOUT }).should('have.text', 'Collection').click()
+    cy.get('[data-testid="collection"]').should('be.visible')
     cy.get('[data-testid="visual-path-map"]').should('not.exist')
-    cy.get('[data-testid="compendium-count"]', { timeout: LOAD_TIMEOUT }).should('have.text', '4 of 69 unlocked')
-    cy.get('[data-section="equality"]').find(entry('one_eq_succ_zero')).should('contain.text', '1 = S(0)')
-    cy.get('[data-section="equality"] [data-testid="compendium-entry"]').should('have.length', 33)
-    cy.get('[data-section="proposition"] [data-testid="compendium-entry"]').should('have.length', 34)
-    cy.get('[data-section="tactic"] [data-testid="compendium-entry"]').should('have.length', 2)
+    cy.get('[data-testid="collection-count"]', { timeout: LOAD_TIMEOUT }).should('have.text', '8 of 90 unlocked')
+    cy.get('[data-testid="collection"] .collection-title').should('have.text', 'Collection')
+    // Two panes side by side: the list on the left, and on the right what is picked in
+    // it, which to begin with is the first thing the player has.
+    cy.get('[data-testid="collection-list"]').then($list => {
+      const list = $list[0]!.getBoundingClientRect()
+      const pane = Cypress.$(detail)[0]!.getBoundingClientRect()
+      expect(pane.left, 'the detail is to the right of the list').to.be.at.least(list.right)
+      expect(pane.width, 'and has room').to.be.greaterThan(300)
+      expect(Math.abs(pane.top - list.top), 'side by side').to.be.lessThan(40)
+    })
+    cy.get('[data-testid="collection-kind"]').should('have.text', 'Symbol')
+    cy.get(`${detail} [data-testid="symbol-card"]`).should('have.attr', 'data-symbol', '∀').and('contain.text', 'For All')
+    cy.get(detail).should('contain.text', 'for any natural number')
+    cy.get('[data-testid="collection-source"]').should('have.text', 'Unlocked in Rewrite World 3')
+    cy.get(`[data-section="symbol"] ${entry('∀')}`).should('have.class', 'selected')
+    // A list within a list: the kind, the tab the game files it under, and its line
+    // with what it says.
+    cy.get('[data-section="symbol"] .collection-section-summary').should('contain.text', '4 of 16')
+    cy.get('[data-section="symbol"] [data-tab]').should('not.exist')
+    cy.get(`[data-section="symbol"] ${entry('S(n)')}`).should('contain.text', 'The Successor Function')
+    cy.get('[data-section="equality"] [data-tab="012"]').find(entry('one_eq_succ_zero'))
+      .should('contain.text', '1 = S(0)')
+    cy.get('[data-section="equality"] [data-tab="012"] .collection-tab-summary').should('contain.text', '4 of 4')
+    cy.get('[data-section="equality"] .collection-section-summary').should('contain.text', '4 of 33')
+    cy.get('[data-section="equality"] [data-tab]').should($tabs => {
+      expect([...$tabs].map(tab => tab.getAttribute('data-tab')).slice(0, 2), 'the tabs in the order of the game').to.deep.equal(['+', '*'])
+    })
+    cy.get('[data-section="tactic"] [data-tab]').should('not.exist')
+    // The lines are one under the other, and a tab folds away.
+    cy.get('[data-section="equality"] [data-tab="012"] [data-testid="collection-entry"]').should($lines => {
+      const rects = [...$lines].map(line => line.getBoundingClientRect())
+      for (let index = 1; index < rects.length; index += 1) {
+        expect(rects[index]!.top, 'a line under the last').to.be.at.least(rects[index - 1]!.bottom - 1)
+      }
+    })
+    cy.get('[data-section="equality"] [data-tab="012"] .collection-tab-summary').click()
+    cy.get('[data-section="equality"]').find(entry('one_eq_succ_zero')).should('not.be.visible')
+    cy.get('[data-section="equality"] [data-tab="012"] .collection-tab-summary').click()
+    cy.get('[data-section="equality"]').find(entry('one_eq_succ_zero')).should('be.visible')
+    cy.get('[data-section="symbol"] [data-testid="collection-entry"]').should('have.length', 16)
+    cy.get('[data-section="equality"] [data-testid="collection-entry"]').should('have.length', 33)
+    cy.get('[data-section="proposition"] [data-testid="collection-entry"]').should('have.length', 39)
+    cy.get('[data-section="tactic"] [data-testid="collection-entry"]').should('have.length', 2)
     // The rest is there greyed out, with no name.
-    cy.get('[data-section="proposition"] [data-testid="compendium-entry"][data-locked="true"]').should('have.length', 34)
-    cy.get('[data-section="tactic"] [data-testid="compendium-entry"][data-locked="true"]').should('have.length', 2)
-    cy.get('[data-testid="compendium-entry"][data-locked="true"]').first().should('have.text', '???')
+    cy.get('[data-section="proposition"] [data-testid="collection-entry"][data-locked="true"]').should('have.length', 39)
+    cy.get('[data-section="tactic"] [data-testid="collection-entry"][data-locked="true"]').should('have.length', 2)
+    cy.get('[data-testid="collection-entry"][data-locked="true"]').first().should('have.text', '???')
     cy.get(entry('add_zero')).should('not.exist')
-    // An entry's page: what it is, and where it came from.
+    // Picking a line shows it on the right, in place of what was there: what it is, and
+    // where it came from. Nothing pops up over the list.
     cy.get(`${entry('one_eq_succ_zero')} button`).click()
-    cy.get('[data-testid="compendium-page"]').should('be.visible')
-    cy.get('[data-testid="compendium-kind"]').should('have.text', 'Axiom')
-    cy.get('[data-testid="compendium-source"]').should('have.text', 'Unlocked in Successor World 0')
-    cy.contains('[data-testid="compendium-page"] button', 'Back').click()
-    cy.get('[data-testid="compendium-page"]').should('not.exist')
-    cy.contains('[data-testid="compendium"] button', 'Map').click()
+    cy.get(entry('one_eq_succ_zero')).should('have.class', 'selected')
+    cy.get(`[data-section="symbol"] ${entry('∀')}`).should('not.have.class', 'selected')
+    cy.get(detail).should('be.visible').and('have.attr', 'data-entry', 'one_eq_succ_zero')
+    cy.get('[data-testid="collection-kind"]').should('have.text', 'Axiom')
+    cy.get(`${detail} .tr-rule-card.tr-axiom-card`).should('contain.text', '1 ⇒ S(0)')
+    cy.get(`${detail} [data-testid="symbol-card"]`).should('not.exist')
+    // What the screen said under all four of them is said of each.
+    cy.get(detail).should('contain.text', 'These first axioms tell us how to expand numbers')
+    cy.get('[data-testid="collection-source"]').should('have.text', 'Unlocked in Successor World 0')
+    cy.contains(`${detail} button`, 'Back').should('not.exist')
+    cy.get('[data-testid="collection-list"]').should('be.visible')
+    cy.contains('[data-testid="collection"] button', 'Map').click()
     cy.get('[data-testid="visual-path-map"]').should('exist')
     cy.get(button).should('exist')
 
@@ -2011,22 +2234,39 @@ describe('Natural Numbers Video Game', () => {
     visitWithProgress({ Intro: 1, Rewrite: 6, Proposition: 8, Successor: 3, SuccessorJoined: 3 })
     cy.get(button, { timeout: LOAD_TIMEOUT }).click()
     cy.get(`${entry('add_one')} button`, { timeout: LOAD_TIMEOUT }).click()
-    cy.get('[data-testid="compendium-kind"]').should('have.text', 'Theorem')
-    cy.get('[data-testid="compendium-page"]').should('contain.text', 'Quickly collapse added ones.')
-      .and('contain.text', 'a + 1 = S(a)')
-    cy.get('[data-testid="compendium-source"]').should('have.text', 'Proved in Successor World 1')
-    cy.contains('[data-testid="compendium-page"] button', 'Back').click()
+    cy.get('[data-testid="collection-kind"]').should('have.text', 'Theorem')
+    cy.get(detail).should('contain.text', 'Quickly collapse added ones.')
+      .and('contain.text', 'a + 1 ⇒ S(a)')
+    cy.get('[data-testid="collection-source"]').should('have.text', 'Proved in Successor World 1')
     cy.get(`${entry('add_zero')} button`).click()
-    cy.get('[data-testid="compendium-kind"]').should('have.text', 'Axiom')
-    cy.get('[data-testid="compendium-page"]').should('contain.text', 'Eliminate added zeroes, but only on the right.')
-    cy.contains('[data-testid="compendium-page"] button', 'Back').click()
+    cy.get('[data-testid="collection-kind"]').should('have.text', 'Axiom')
+    cy.get(detail).should('contain.text', 'Eliminate added zeroes, but only on the right.')
+      .and('not.contain.text', 'Quickly collapse added ones.')
     // Induction World's first level can be played, so its tactic is the player's.
     cy.get(`[data-section="tactic"] ${entry('induction')} button`).click()
-    cy.get('[data-testid="compendium-kind"]').should('have.text', 'Tactic')
-    cy.get('[data-testid="compendium-source"]').should('have.text', 'Unlocked in Induction World 0')
-    cy.contains('[data-testid="compendium-page"] button', 'Back').click()
+    cy.get('[data-testid="collection-kind"]').should('have.text', 'Tactic')
+    cy.get('[data-testid="collection-source"]').should('have.text', 'Unlocked in Induction World 0')
     // `zero_add` is proved there, and that level isn't done.
     cy.get(entry('zero_add')).should('not.exist')
+    // Proposition World's symbols came with its levels; a symbol with no name of its
+    // own is a line all the same.
+    cy.get(`[data-section="symbol"] ${entry('→')} button`).click()
+    cy.get('[data-testid="collection-kind"]').should('have.text', 'Symbol')
+    cy.get('[data-testid="collection-source"]').should('have.text', 'Unlocked in Proposition World 1')
+    cy.get(`[data-section="symbol"] ${entry('↔')}`).should('exist')
+    // The `∨` comes with the right-hand branch, which can be played but isn't done.
+    cy.get(`[data-section="symbol"] ${entry('∨')}`).should('exist')
+    cy.get(`[data-section="symbol"] ${entry('False')}`).should('not.exist')
+
+    // A phone has no room for two panes side by side: what is picked is on top.
+    cy.viewport(390, 844)
+    cy.get('[data-testid="collection-list"]').should($list => {
+      const list = $list[0]!.getBoundingClientRect()
+      const pane = Cypress.$(detail)[0]!.getBoundingClientRect()
+      expect(pane.bottom, 'the detail is above the list').to.be.at.most(list.top + 1)
+      expect(list.height, 'the list keeps most of the room').to.be.greaterThan(pane.height)
+    })
+    cy.viewport(1000, 660)
   })
 
   it('proves the theorem level with the axioms', () => {
@@ -2059,7 +2299,8 @@ describe('Natural Numbers Video Game', () => {
   it('offers the proved theorem, not in the axiom colour, in the Successor World boss', () => {
     openRewriteLevel(3, 'Successor')
     headerShouldNameLevel('2', 'Counting to Four')
-    lessonsShouldContain('‘theorem’ levels')
+    // Its hint is gone: the screen after the level before says what it said.
+    cy.contains('‘theorem’ levels').should('not.exist')
     // The level opens on the + tab, which holds the theorem next to the two axioms.
     cy.contains('.tr-tab-btn', 'Axioms').should('not.exist')
     cy.contains('.tr-tab-btn', 'Theorems').should('not.exist')
@@ -2070,9 +2311,12 @@ describe('Natural Numbers Video Game', () => {
     cy.get('.tr-rule-card[data-rule-label="add_one"]').should('exist').and('not.have.attr', 'data-rule-axiom')
     cy.get('.tr-rule-card[data-rule-label="add_zero"]').filter(':visible').first()
       .should('have.attr', 'data-rule-axiom', 'true').and('have.class', 'tr-axiom-card')
-    // The numerals' axioms are on their own tab.
+    // The numerals' axioms are on their own tab, and no tab lists everything.
     cy.get('.tr-rule-card[data-rule-label="one_eq_succ_zero"]').should('not.exist')
-    cy.contains('.tr-tab-btn', 'Everything').click()
+    cy.contains('.tr-tab-btn', 'Everything').should('not.exist')
+    cy.get('.tr-tab-btn').should($tabs => {
+      expect([...$tabs].map(tab => tab.textContent?.trim())).to.deep.equal(['+', '012'])
+    })
     rewrite('MyNat.add_one', 'left')
     rewrite('MyNat.add_one', 'left', [1])
     rewrite('MyNat.add_one', 'left', [1, 1])
@@ -2192,11 +2436,11 @@ describe('Natural Numbers Video Game', () => {
       const sidebar = Cypress.$('.proof-sidebar.open .proof-sidebar-inner')[0]?.getBoundingClientRect().right ?? 0
       expect(lessons.left + lessons.width / 2, 'in the middle').to.be.closeTo((sidebar + header.right) / 2, 2)
     })
-    cy.get('[data-brick-id="fn_add"]').click()
+    clickBrick('fn_add')
     hintShouldContain('so now we can slot in the')
-    cy.get('[data-brick-id="num_3"]').click()
+    clickBrick('num_3')
     hintShouldContain('so now we can slot in the')
-    cy.get('[data-brick-id="num_3"]').click()
+    clickBrick('num_3')
     hintShouldContain('to return to Proposition Mode')
     arrowStopsShortOf('.specialize-guide-arrow', '[data-testid="specialize-done"]')
     cy.get('[data-testid="specialize-done"]').click()
@@ -2544,7 +2788,6 @@ describe('Natural Numbers Video Game', () => {
     openCanvasLevel('InductionJoined', 3)
     headerShouldNameLevel('6', 'Zero or No Zero?')
     goalShouldBe('∀ (n : ℕ), n = 0 ∨ n ≠ 0')
-    goalHintShouldContain('weaker cousin')
     trayIsLoaded()
     trayShouldHaveCard('add_left_eq_self', true)
     // The Tactics tab glows while a use is left on the branch, selected or not.
@@ -2568,8 +2811,6 @@ describe('Natural Numbers Video Game', () => {
     cy.get('[data-testid="stream-nav-next"]:not(:disabled)', { timeout: LOAD_TIMEOUT }).filter(':visible').first().click()
     goalShouldBe('S n1 = 0 ∨ S n1 ≠ 0')
     hypShouldExist('n1')
-    // Its hint is for the whole level, so it is still there.
-    goalHintShouldContain('weaker cousin')
     // Level 7 allows it twice. `add_left_eq_zero` is ≤ World's to give.
     openCanvasLevel('InductionJoined', 4)
     headerShouldNameLevel('7', 'add_right_eq_zero (Miniboss)')
@@ -2622,7 +2863,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('refutes a careless statement of Fermat in the bonus off the last boss', () => {
     openCanvasLevel('PowerBonus', 1)
-    headerShouldNameLevel('A0', "Refute Fermat's Last Theorem?")
+    headerShouldNameLevel('B0', "Refute Fermat's Last Theorem?")
     goalShouldBe('(∀ (a b c n : ℕ), n > 2 → a ^ n + b ^ n ≠ c ^ n) → False')
     clickGoal()
     goalShouldBe('False')
@@ -2775,7 +3016,7 @@ describe('Natural Numbers Video Game', () => {
     trayShouldHaveCard('leq_refl', false)
     trayShouldHaveCard('eq_implies_leq', false)
     openCanvasLevel('LessOrEqual', 3)
-    headerShouldNameLevel('2', 'Positivity')
+    headerShouldNameLevel('2', 'Non-negativity of ℕ')
     goalShouldBe('∀ (n : ℕ), 0 ≤ n')
     cy.get('[data-testid="theorem-tray-card"]', { timeout: LOAD_TIMEOUT }).should('have.length.greaterThan', 0)
     trayShouldHaveCard('leq_refl', true)
@@ -2865,10 +3106,27 @@ describe('Natural Numbers Video Game', () => {
         turnPages(remaining - 1)
       })
     }
-    turnPages(40)
+    // The game has no tab for all of them (`VisualNoAllTab`): every tab is looked at.
+    cy.get('[data-testid="theorem-category-tabs"] .tr-tab-btn').should('have.length.greaterThan', 3).each($tab => {
+      cy.wrap($tab).click()
+      cy.wait(400)
+      turnPages(40)
+    })
+    cy.contains('[data-testid="theorem-category-tabs"] .tr-tab-btn', 'All').should('not.exist')
     cy.then(() => {
       expect(cards, 'cards looked at').to.be.at.least(30)
       expect([...heights], 'card heights').to.have.length(1)
+    })
+    // On a PC the row of tabs that ends the menu has more room under its labels than the
+    // row above it, for the operating system's own bar.
+    cy.get('.theorem-tray-panel .tr-dock-tabs').should($rows => {
+      expect($rows.length, 'rows of tabs').to.equal(2)
+      const [upper, lowest] = [...$rows].map(row => ({
+        height: row.getBoundingClientRect().height,
+        padding: parseFloat(getComputedStyle(row.querySelector('.tr-tab-btn')!).paddingBottom),
+      }))
+      expect(lowest!.padding, 'room under the lowest labels').to.be.greaterThan(upper!.padding + 10)
+      expect(lowest!.height, 'the lowest row is the taller').to.be.greaterThan(upper!.height + 10)
     })
   })
 
@@ -2933,7 +3191,7 @@ describe('Natural Numbers Video Game', () => {
   const specializeTo = (type: string, bricks: string[]) => {
     withHyp(type, name => cy.get(cardNamed(name)).filter(':visible').first().click())
     cy.get('.tr-construction-overlay', { timeout: LOAD_TIMEOUT }).should('be.visible')
-    for (const brick of bricks) cy.get(`[data-brick-id="${brick}"]`).click()
+    for (const brick of bricks) clickBrick(brick)
     cy.get('[data-testid="specialize-done"]').click()
     cy.get('.tr-construction-overlay', { timeout: LOAD_TIMEOUT }).should('not.exist')
   }
@@ -3049,6 +3307,40 @@ describe('Natural Numbers Video Game', () => {
     notProcessing()
     dragWithPointer('[data-tactic-name="induction"]', '[data-testid="type-column"] [data-testid="hyp-card"][data-hyp-name="n"]')
     goalShouldBe('0 + 0 = 0')
+  })
+
+  it('draws a dragged card over the proof panel, never behind it', () => {
+    openCanvasLevel('Induction', 1)
+    clickGoal()
+    goalShouldBe('0 + n = n')
+    cy.get('.proof-sidebar').should('have.class', 'open')
+    cy.get('#visual_tactic_induction').filter(':visible').then($card => {
+      const rect = $card[0]!.getBoundingClientRect()
+      const panel = Cypress.$('.proof-sidebar.open .proof-sidebar-inner')[0]!.getBoundingClientRect()
+      const [x, y] = [rect.left + rect.width / 2, rect.top + rect.height / 2]
+      // To the middle of the panel's right edge, so the card lies half over it.
+      const [toX, toY] = [panel.right, panel.top + panel.height / 2]
+      const at = (clientX: number, clientY: number) => ({ clientX, clientY, pointerId: 7, isPrimary: true, button: 0, force: true })
+      cy.wrap($card).trigger('pointerdown', at(x, y))
+      cy.get('body').trigger('pointermove', at((x + toX) / 2, (y + toY) / 2)).trigger('pointermove', at(toX, toY))
+      cy.get('.tactic-overlay-card').should('be.visible').then($dragged => {
+        const dragged = $dragged[0]!.getBoundingClientRect()
+        expect(dragged.left, 'over the panel').to.be.lessThan(panel.right)
+        // Where it lies over the panel, what is on top belongs to the dragged card's layer.
+        const onTop = $dragged[0]!.ownerDocument.elementFromPoint((dragged.left + Math.min(dragged.right, panel.right)) / 2, dragged.top + dragged.height / 2)
+        expect(Boolean(onTop?.closest('.visual-drag-layer')), `on top of the panel (found ${onTop?.tagName}.${onTop?.className})`).to.equal(true)
+        const layer = $dragged.closest('.visual-drag-layer')
+        expect(layer.length, 'in the layer for dragged cards').to.equal(1)
+        const above = Number(getComputedStyle(layer[0]!).zIndex)
+        expect(above, 'above the panel').to.be.greaterThan(Number(getComputedStyle(Cypress.$('.proof-sidebar')[0]!).zIndex))
+        // It looks as it does in the tray it came from.
+        expect(getComputedStyle($dragged[0]!).fontSize).to.equal(getComputedStyle($card[0]!).fontSize)
+      })
+      cy.get('body').trigger('pointerup', at(toX, toY))
+    })
+    // Let go over the panel, it made no move.
+    cy.get('.tactic-overlay-card').should('not.exist')
+    goalShouldBe('0 + n = n')
   })
 
   it('fits the map to the window, a phone\'s included, so it never scrolls sideways', () => {
@@ -3223,6 +3515,7 @@ describe('Natural Numbers Video Game', () => {
     // `n ⇐ n + 0` fits any term, so the drop says which one. NNVG has no Mathlib,
     // whose `nth_rewrite` this used to be sent as.
     notProcessing()
+    showRule('add_zero')
     dragWithPointer('.tr-rule-card[data-rule-label="add_zero"]', '.tr-expr-wrapper [data-expr-text="a"]')
     relationShouldBe('(a + 0) + 1 = S(a)')
     // A click rewrites the first term it fits: the whole left side.
@@ -3264,7 +3557,7 @@ describe('Natural Numbers Video Game', () => {
 
   it('pages Rewrite Mode rules without overflow on a large window', () => {
     cy.viewport(2560, 1440)
-    openCanvasLevel('Multiplication', 6)
+    openCanvasLevel('Multiplication', 5)
     clickGoal()
     goalShouldBe('2 * m = m + m')
     harness(h => h.openGoalTransform())
@@ -3324,9 +3617,12 @@ describe('Natural Numbers Video Game', () => {
       })
     }
     pageHoldsItsCards()
-    cy.get('.tr-transformation-overlay .tr-page-indicator').should('contain.text', 'of 2')
-    // Every tab, and the other direction: the page fits at once, and stays fitting.
-    cy.get('.tr-transformation-overlay .tr-tab-btn').each($tab => {
+    // The game has no tab with every rule on it, so no tab here needs a second page;
+    // each of them is looked at, and the other direction: the page fits at once, and
+    // stays fitting.
+    cy.contains('.tr-transformation-overlay .tr-tab-btn', 'Everything').should('not.exist')
+    cy.get('.tr-transformation-overlay .tr-tab-btn.active').should('have.text', 'Hypotheses')
+    cy.get('.tr-transformation-overlay .tr-tab-btn').should('have.length.greaterThan', 2).each($tab => {
       cy.wrap($tab).click()
       pageHoldsItsCards()
       cy.wait(500)

@@ -21,8 +21,8 @@ import { unloadedFeedbackState } from './loadDiagnostics'
 import type { LoadFailure } from './loadFailure'
 import type { CanvasState, PropositionTheorem, VisualGoalInfo, VisualHypGoalInfo, VisualProofGraphInfo, VisualSpecializationInfo, VisualTactic, VisualTacticHypInfo, VisualTransformInfo } from './types'
 import type { EqualityHyp } from './TransformationView'
-import { parseEqualityHyp } from './TransformationView'
-import { buildEqualityTheoremDisplay, buildPropositionTheoremDisplay } from './quantifiedStatement'
+import { parseTheoremStatement } from './TransformationView'
+import { buildPropositionTheoremDisplay } from './quantifiedStatement'
 import { inferAtomicReductionForms, setLeDefinition } from './existsDisplay'
 import { goalInfosForLevel } from './levelPresentation'
 import type { ProofState } from '../components/infoview/rpc_api'
@@ -35,8 +35,8 @@ import { levelStartsWithBindersInGoal } from './initialGoalState'
 import { VisualAttemptLog } from './visualTelemetry'
 import type { VisualGesture } from './visualTelemetry'
 import { bonusAnchorsOf, computeVisualProgressFrontier, isVisualLevelUnlocked } from './visualWorldProgress'
-import { VISUAL_TACTIC_NAMES, type InterstitialScreen } from './compendiumData'
-import { interstitialsEnabled, LevelFinishContext, LevelInterstitial, resolveUnlocks, type Unlock } from './LevelInterstitial'
+import { axiomTest, bossAnnouncement, screenPages, VISUAL_TACTIC_NAMES, type InterstitialScreen } from './collectionData'
+import { interstitialsEnabled, LevelFinishContext, LevelInterstitial, loadTheoremDoc, resolveScreen, type ScreenPage } from './LevelInterstitial'
 import './visual.css'
 
 const SUPPORTED_VISUAL_TACTICS = VISUAL_TACTIC_NAMES
@@ -245,23 +245,6 @@ async function fetchJsonWithRetry<T>(
   return null
 }
 
-/** Parse an NNG4 theorem statement like " (a d : ℕ) : a + MyNat.succ d = MyNat.succ (a + d)"
- *  by stripping the argument prefix and normalizing Lean notation for the arithmetic parser. */
-function parseTheoremStatement(
-  statement: string,
-  displayName: string,
-  thmName: string,
-): (EqualityHyp & { forallFooter?: string }) | null {
-  const theoremDisplay = buildEqualityTheoremDisplay(statement)
-  let body = theoremDisplay.mainText
-  body = body
-    .replace(/\bsucc\s+(\d+)\b/g, 'succ($1)')
-    .replace(/\bsucc\s+\(/g, 'succ(')
-    .replace(/\bsucc\s+([a-zA-Z]\w*)/g, 'succ($1)')
-  const parsed = parseEqualityHyp(body, displayName, thmName)
-  return parsed ? { ...parsed, forallFooter: theoremDisplay.forallFooter } : null
-}
-
 function visualTacticActivation(name: string): VisualTactic['activation'] {
   return name === 'positivity' ? 'goal_click' : 'drag'
 }
@@ -359,8 +342,8 @@ export function VisualProofPage() {
   }, [navigate, gameId, worldId, nextLevelId])
   // The screens before and after this level, and the one that is up.
   const [levelScreens, setLevelScreens] = useState<{
-    pre?: { screen: InterstitialScreen; unlocks: Unlock[] }
-    post?: { screen: InterstitialScreen; unlocks: Unlock[] }
+    pre?: ScreenPage[]
+    post?: ScreenPage[]
   } | null>(null)
   const [openScreen, setOpenScreen] = useState<'pre' | 'post' | null>(null)
   const afterPostLevelRef = useRef<(() => void) | null>(null)
@@ -368,6 +351,7 @@ export function VisualProofPage() {
   // level that teaches a gesture; "Open Any Level" lifts the lock.
   const { isVisualOpenAnyLevel, isVisualFullComplete } = useContext(PreferencesContext)
   const gameInfo = useGetGameInfoQuery({ game: gameId })
+  const isAxiom = React.useMemo(() => axiomTest(gameInfo.data?.visualAxioms), [gameInfo.data?.visualAxioms])
   useRetryUntilData(gameInfo)
   // Where fresh cards are laid out depends on it (leanToCanvas).
   setTypeColumnLayout(gameInfo.data?.visualTypeColumn ?? false)
@@ -616,6 +600,7 @@ export function VisualProofPage() {
         visualTacticUses?: Array<{ tactic: string; uses: number }>
         visualEmphasizeForall?: string[]
         visualMulDot?: boolean
+        visualBossLevel?: boolean
         visualPreLevel?: InterstitialScreen | null
         visualPostLevel?: InterstitialScreen | null
       }>(`${baseUrl}/${gameId}/level__${worldId}__${levelId}.json`),
@@ -653,14 +638,36 @@ export function VisualProofPage() {
           mulDot: levelData.visualMulDot ?? false,
         })
         // The screens before and after the level (experimental). The one before it comes
-        // up as the level opens, whichever way the player got here.
-        if (interstitialsEnabled() && !levelData.visualTextLevel
-            && (levelData.visualPreLevel || levelData.visualPostLevel)) {
+        // up once the level has loaded, whichever way the player got here. A boss level
+        // with no screen of its own before it is announced by its title.
+        const announcement = levelData.visualBossLevel && levelData.title
+          ? bossAnnouncement(
+              levelData.title,
+              gameData?.worlds?.nodes?.[worldId]?.title ?? '',
+              levelId === gameData?.worldSize?.[worldId],
+            )
+          : null
+        // A boss level with a screen of its own is announced on a last page of it,
+        // unless one of its pages is an announcement already.
+        const ownScreen = levelData.visualPreLevel
+        const announced = screenPages(ownScreen).some(page => !page.items?.length && !page.symbols?.length)
+        const preLevel: InterstitialScreen | null = ownScreen
+          ? (announcement && !announced ? { ...ownScreen, more: [...(ownScreen.more ?? []), announcement] } : ownScreen)
+          : announcement
+        if (interstitialsEnabled() && !levelData.visualTextLevel && (preLevel || levelData.visualPostLevel)) {
           const screenOf = (screen: InterstitialScreen | null | undefined) => screen
-            ? { screen, unlocks: resolveUnlocks(screen, levelData.lemmas ?? [], levelData.tactics ?? []) }
+            ? resolveScreen(screen, levelData.lemmas ?? [], levelData.tactics ?? [])
             : undefined
-          setLevelScreens({ pre: screenOf(levelData.visualPreLevel), post: screenOf(levelData.visualPostLevel) })
-          if (levelData.visualPreLevel) setOpenScreen('pre')
+          const screens = { pre: screenOf(preLevel), post: screenOf(levelData.visualPostLevel) }
+          setLevelScreens(screens)
+          // A screen comes up with its cards complete: their statements are fetched
+          // first, the ones for the screen after the level while it is played.
+          const statementsOf = (screen: typeof screens.pre) => Promise.all((screen ?? [])
+            .flatMap(page => page.unlocks)
+            .filter(unlock => unlock.type === 'theorem')
+            .map(unlock => loadTheoremDoc(gameId, unlock.name)))
+          void statementsOf(screens.post)
+          if (screens.pre) void statementsOf(screens.pre).then(() => { if (active) setOpenScreen(current => current ?? 'pre') })
         }
         // A text-only level is read on the world map, not played here.
         if (levelData.visualTextLevel) {
@@ -832,8 +839,8 @@ export function VisualProofPage() {
       key={`${worldId}/${levelId}/${openScreen}`}
       gameId={gameId}
       kind={openScreen}
-      screen={screenUp.screen}
-      unlocks={screenUp.unlocks}
+      pages={screenUp}
+      isAxiom={isAxiom}
       buttonLabel={openScreen === 'pre' ? 'Start' : 'Continue'}
       onDone={() => {
         const next = openScreen === 'post' ? afterPostLevelRef.current : null
@@ -874,7 +881,9 @@ export function VisualProofPage() {
       getFeedbackProofState={() => unloadedFeedbackState()}
       titlePending={levelTitle === null}
     />
-    {interstitial}
+    {/* A screen before the level waits until this one is done; the one after a
+        finished level, asked for from the header here, needn't. */}
+    {openScreen === 'post' && interstitial}
     </LevelFinishContext.Provider>
   }
 
@@ -910,6 +919,8 @@ export function VisualProofPage() {
       mulDot={levelPresentation.mulDot}
       gameFastExfalso={gameInfo.data?.visualFastExfalso ?? false}
       typeColumn={gameInfo.data?.visualTypeColumn ?? false}
+      noAllTab={gameInfo.data?.visualNoAllTab ?? false}
+      peanoTab={gameInfo.data?.visualPeanoTab}
       numberedSplits={gameInfo.data?.visualNumberedSplits ?? false}
       worldId={worldId}
       levelId={levelId}

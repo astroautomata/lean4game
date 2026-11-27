@@ -234,51 +234,74 @@ elab "VisualStartTab" tab:str : command => do
   modifyCurLevel fun lvl => pure { lvl with visualStartTab? := some tab.getString }
 
 /-- Visual Lean shows a screen before this level is played, over the dimmed level: what
-the player is about to prove, or the theorems and tactics the level brings. This sets
-its title; `VisualPreLevelUnlock` adds a theorem or tactic to it and `VisualPreLevelText`
-a text under them all. Example: `VisualPreLevel "Axioms Unlocked!"` -/
+the player is about to prove, or the symbols, theorems and tactics the level brings.
+This sets its title; `VisualPreLevelSymbol` and `VisualPreLevelUnlock` add to it and
+`VisualPreLevelText` puts a text under them all. A second `VisualPreLevel` starts another
+page, shown when the player moves on from the first, and the commands after it write
+that page. Example: `VisualPreLevel "Axioms Unlocked!"` -/
 elab "VisualPreLevel " title:str : command => do
   modifyCurLevel fun lvl => pure { lvl with
-    visualPreLevel? := some { lvl.visualPreLevel?.getD {} with title := title.getString } }
+    visualPreLevel? := some ((lvl.visualPreLevel?.getD {}).withTitle title.getString) }
+
+/-- Add a symbol to the screen before this level: the symbol, what it is called, and what
+the screen says about it (which the Collection repeats).
+Example: `VisualPreLevelSymbol "∀" "For All" "For any number you pick."` -/
+elab "VisualPreLevelSymbol " symbol:str name:str text:(str)? : command => do
+  let item : VisualInterstitialSymbol :=
+    { symbol := symbol.getString, name := name.getString, text := (text.map (·.getString)).getD "" }
+  modifyCurLevel fun lvl => pure { lvl with
+    visualPreLevel? := some ((lvl.visualPreLevel?.getD {}).modifyLastPage fun page =>
+      { page with symbols := page.symbols.push item }) }
 
 /-- Add a theorem or tactic to the screen before this level, by the name the player
-knows it by, with what the screen says about it (which the Compendium repeats).
+knows it by, with what the screen says about it (which the Collection repeats).
 Example: `VisualPreLevelUnlock add_zero "Eliminate added zeroes, but only on the right."` -/
 elab "VisualPreLevelUnlock " name:ident text:(str)? : command => do
   let item : VisualInterstitialItem :=
     { name := name.getId.toString, text := (text.map (·.getString)).getD "" }
   modifyCurLevel fun lvl => pure { lvl with
-    visualPreLevel? := some (let screen := lvl.visualPreLevel?.getD {}
-      { screen with items := screen.items.push item }) }
+    visualPreLevel? := some ((lvl.visualPreLevel?.getD {}).modifyLastPage fun page =>
+      { page with items := page.items.push item }) }
 
 /-- The text under everything else on the screen before this level. -/
 elab "VisualPreLevelText " text:str : command => do
   modifyCurLevel fun lvl => pure { lvl with
-    visualPreLevel? := some { lvl.visualPreLevel?.getD {} with text := text.getString } }
+    visualPreLevel? := some ((lvl.visualPreLevel?.getD {}).modifyLastPage
+      ({ · with text := text.getString })) }
 
 /-- Visual Lean shows a screen once this level is finished, on the way to the next one:
 the theorems and tactics the player has earned. The button that leaves the level reads
-"Finish" then. This sets its title; `VisualPostLevelUnlock` adds a theorem or tactic to
-it and `VisualPostLevelText` a text under them all.
-Example: `VisualPostLevel "Theorem Unlocked!"` -/
+"Finish" then. This sets its title; `VisualPostLevelSymbol` and `VisualPostLevelUnlock`
+add to it and `VisualPostLevelText` puts a text under them all. A second `VisualPostLevel`
+starts another page. Example: `VisualPostLevel "Theorem Unlocked!"` -/
 elab "VisualPostLevel " title:str : command => do
   modifyCurLevel fun lvl => pure { lvl with
-    visualPostLevel? := some { lvl.visualPostLevel?.getD {} with title := title.getString } }
+    visualPostLevel? := some ((lvl.visualPostLevel?.getD {}).withTitle title.getString) }
+
+/-- Add a symbol to the screen after this level: the symbol, what it is called, and what
+the screen says about it. Example: `VisualPostLevelSymbol ">" "Greater Than"` -/
+elab "VisualPostLevelSymbol " symbol:str name:str text:(str)? : command => do
+  let item : VisualInterstitialSymbol :=
+    { symbol := symbol.getString, name := name.getString, text := (text.map (·.getString)).getD "" }
+  modifyCurLevel fun lvl => pure { lvl with
+    visualPostLevel? := some ((lvl.visualPostLevel?.getD {}).modifyLastPage fun page =>
+      { page with symbols := page.symbols.push item }) }
 
 /-- Add a theorem or tactic to the screen after this level, by the name the player
-knows it by, with what the screen says about it (which the Compendium repeats).
+knows it by, with what the screen says about it (which the Collection repeats).
 Example: `VisualPostLevelUnlock add_one "Quickly collapse added ones."` -/
 elab "VisualPostLevelUnlock " name:ident text:(str)? : command => do
   let item : VisualInterstitialItem :=
     { name := name.getId.toString, text := (text.map (·.getString)).getD "" }
   modifyCurLevel fun lvl => pure { lvl with
-    visualPostLevel? := some (let screen := lvl.visualPostLevel?.getD {}
-      { screen with items := screen.items.push item }) }
+    visualPostLevel? := some ((lvl.visualPostLevel?.getD {}).modifyLastPage fun page =>
+      { page with items := page.items.push item }) }
 
 /-- The text under everything else on the screen after this level. -/
 elab "VisualPostLevelText " text:str : command => do
   modifyCurLevel fun lvl => pure { lvl with
-    visualPostLevel? := some { lvl.visualPostLevel?.getD {} with text := text.getString } }
+    visualPostLevel? := some ((lvl.visualPostLevel?.getD {}).modifyLastPage
+      ({ · with text := text.getString })) }
 
 /-- Limit how often a tactic of Visual Lean's tray can be used along one branch of a
 proof: its card shows the uses left, as `x1`, and once they are spent on a branch it is
@@ -383,6 +406,16 @@ elab "VisualAxioms" names:ident* : command => do
     visualAxioms := names.foldl (fun axioms name =>
       if axioms.contains name.getId then axioms else axioms.push name.getId) game.visualAxioms }
 
+/-- Proposition Mode's lower menu works out its own tabs, and of the theorems a game
+files under `Peano` it keeps only `reflection` and `peano_cases` on its Peano tab: the
+rest go where their statements put them (`succ_inj` among the `+` theorems). This puts
+the named theorems on the Peano tab too. Use it in the game file, before `MakeGame`; it
+can be used several times. Example: `VisualPeanoTab MyNat.succ_inj` -/
+elab "VisualPeanoTab" names:ident* : command => do
+  modifyCurGame fun game => pure { game with
+    visualPeanoTab := names.foldl (fun listed name =>
+      if listed.contains name.getId then listed else listed.push name.getId) game.visualPeanoTab }
+
 /-- Give the game Visual Lean's neutral look. It has one scheme, with no light mode: the
 map is a slate, and inside a world the page, its panels and everything coloured are the
 world's own (`VisualWorldColor`). An open goal and Rewrite Mode's check mark are the
@@ -398,6 +431,14 @@ still dropped on them. The Proof tab moves down beside the Reset and Undo button
 it in the game file, before `MakeGame`. -/
 elab "VisualTypeColumn" : command => do
   modifyCurGame fun game => pure { game with visualTypeColumn := true }
+
+/-- Leave the tab that lists everything out of Visual Lean's lower menus: "All" among
+Proposition Mode's theorems, "Everything" in Rewrite Mode and in the specialization
+view. Each menu opens on the first of its tabs that has something in it, and a hint that
+points at a card brings up the tab the card is on. Use it in the game file, before
+`MakeGame`. -/
+elab "VisualNoAllTab" : command => do
+  modifyCurGame fun game => pure { game with visualNoAllTab := true }
 
 /-- Draw the Visual Lean world map as paths of individual levels instead of worlds with
 orbiting level dots. Each world is a column of its levels; worlds join along their
@@ -421,6 +462,14 @@ elab "VisualBonusSide" side:ident : command => do
   unless name == "left" || name == "right" do
     throwError "VisualBonusSide takes `left` or `right`"
   modifyCurWorld fun world => pure { world with visualBonusSide? := some name }
+
+/-- Path map: a bonus world that waits for another world besides the one it branches off
+gets a path from that world too. This leaves the path from `source` out: the bonus
+levels still wait for it, and a locked level's tooltip says so. Use it in the bonus
+world's file, once for each such world. Example: `VisualNoPathFrom Neq` -/
+elab "VisualNoPathFrom" source:ident : command => do
+  modifyCurWorld fun world => pure { world with
+    visualNoPathFrom := world.visualNoPathFrom.push source.getId }
 
 /-- Path map: colour of the current world's path, one of `purple`, `blue`, `sky`,
 `teal`, `green`, `amber`, `orange`, `red`, `pink`, `indigo`, `lime` and `grey`, or one of

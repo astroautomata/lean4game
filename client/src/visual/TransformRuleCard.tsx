@@ -101,6 +101,25 @@ export function EqualityHypCard({
   )
 }
 
+/** A theorem's rule card as Rewrite Mode shows it, to look at: it isn't picked up or
+ *  clicked, and it is as wide as its rule. */
+export function EqualityRulePreviewCard({ label, lhsStr, rhsStr, lhsNode, rhsNode, forallFooter, axiom = false }:
+  Pick<EqualityHypCardProps, 'label' | 'lhsStr' | 'rhsStr' | 'lhsNode' | 'rhsNode' | 'forallFooter' | 'axiom'>) {
+  const mulDot = React.useContext(MulDotContext)
+  const symbol = `${formatRuleExpr(lhsStr, lhsNode)} ⇒ ${formatRuleExpr(rhsStr, rhsNode)}`
+  return (
+    <div
+      className={`tr-rule-card tr-eq-card tr-rule-preview-card${axiom ? ' tr-axiom-card' : ''}${forallFooter ? ' has-forall-footer' : ''}`}
+      data-rule-label={label}
+      data-rule-axiom={axiom ? 'true' : undefined}
+    >
+      <h3>{renderFormulaText(label)}</h3>
+      <div className="tr-symbol">{renderFormulaText(symbol, mulDot)}</div>
+      {forallFooter && <div className="tr-forall-footer">{formatRuleExpr(forallFooter)}</div>}
+    </div>
+  )
+}
+
 interface TheoremCardProps {
   dragId: string
   name: string
